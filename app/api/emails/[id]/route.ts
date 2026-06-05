@@ -1,0 +1,33 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { analyzeEmail } from "@/lib/analyze";
+export async function GET(_req: NextRequest, { params }: { params: Promise<{id:string}> }) {
+  const { id } = await params;
+  const email = await prisma.email.findUnique({ where:{id}, include:{publisher:true,topics:{include:{topic:true}},tags:{include:{tag:true}},offer:true} });
+  if (!email) return NextResponse.json({ error:"Not found" },{status:404});
+  return NextResponse.json(email);
+}
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{id:string}> }) {
+  const { id } = await params;
+  const body = await req.json();
+  const { publisherId, publisherConfirmed, emailType, emailTypeConfirmed, tagIds } = body;
+  const updateData: Record<string,unknown> = {};
+  if (publisherId !== undefined) updateData.publisherId = publisherId;
+  if (publisherConfirmed !== undefined) updateData.publisherConfirmed = publisherConfirmed;
+  if (emailType !== undefined) updateData.emailType = emailType;
+  if (emailTypeConfirmed !== undefined) updateData.emailTypeConfirmed = emailTypeConfirmed;
+  if (tagIds !== undefined) updateData.tags = { deleteMany:{}, create:(tagIds as string[]).map((tagId)=>({tagId})) };
+  const email = await prisma.email.update({ where:{id}, data:updateData, include:{publisher:true,topics:{include:{topic:true}},tags:{include:{tag:true}},offer:true} });
+  if (publisherId && publisherConfirmed) {
+    const e = await prisma.email.findUnique({ where:{id}, select:{fromEmail:true} });
+    if (e) { const pub = await prisma.publisher.findUnique({where:{id:publisherId}}); if (pub && !pub.knownFromAddresses.includes(e.fromEmail)) await prisma.publisher.update({where:{id:publisherId},data:{knownFromAddresses:{push:e.fromEmail}}}); }
+  }
+  return NextResponse.json(email);
+}
+export async function POST(_req: NextRequest, { params }: { params: Promise<{id:string}> }) {
+  const { id } = await params;
+  const email = await prisma.email.findUnique({ where:{id} });
+  if (!email) return NextResponse.json({error:"Not found"},{status:404});
+  await analyzeEmail(email.id, email.subject, email.fromName??"", email.fromEmail, email.bodyText, email.bodyHtml);
+  return NextResponse.json(await prisma.email.findUnique({where:{id},include:{publisher:true,topics:{include:{topic:true}},tags:{include:{tag:true}},offer:true}}));
+}

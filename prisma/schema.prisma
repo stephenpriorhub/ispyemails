@@ -1,0 +1,149 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String
+  role      Role     @default(USER)
+  status    Status   @default(ACTIVE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum Status {
+  ACTIVE
+  SUSPENDED
+}
+
+model GmailAccount {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  accessToken  String    @db.Text
+  refreshToken String    @db.Text
+  tokenExpiry  DateTime?
+  historyId    String?
+  lastSyncAt   DateTime?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Publisher {
+  id                 String   @id @default(cuid())
+  name               String   @unique
+  domains            String[]
+  knownFromAddresses String[]
+  logoUrl            String?
+  website            String?
+  notes              String?
+  isConfirmed        Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  emails             Email[]
+}
+
+model Email {
+  id                 String     @id @default(cuid())
+  gmailMessageId     String     @unique
+  subject            String
+  fromName           String?
+  fromEmail          String
+  toEmail            String?
+  receivedAt         DateTime
+  bodyHtml           String?    @db.Text
+  bodyText           String?    @db.Text
+  snippet            String?
+  inboxPlacement     Placement  @default(UNKNOWN)
+  publisherId        String?
+  publisher          Publisher? @relation(fields: [publisherId], references: [id])
+  publisherConfirmed Boolean    @default(false)
+  emailType          EmailType  @default(UNKNOWN)
+  emailTypeConfirmed Boolean    @default(false)
+  aiSummary          String?    @db.Text
+  aiTicker           String?
+  aiConfidence       Float?
+  isProcessed        Boolean    @default(false)
+  syncedAt           DateTime   @default(now())
+  createdAt          DateTime   @default(now())
+  topics             EmailTopic[]
+  tags               EmailTag[]
+  offer              Offer?
+
+  @@index([receivedAt])
+  @@index([fromEmail])
+  @@index([publisherId])
+  @@index([inboxPlacement])
+  @@index([emailType])
+}
+
+enum Placement {
+  PRIMARY
+  PROMOTIONS
+  SPAM
+  UPDATES
+  SOCIAL
+  UNKNOWN
+}
+
+enum EmailType {
+  LIFT_NOTE
+  EDITORIAL
+  PROMO
+  UNKNOWN
+}
+
+model Topic {
+  id        String       @id @default(cuid())
+  name      String       @unique
+  isIgnored Boolean      @default(false)
+  color     String?
+  synonyms  String[]     // merged/alias names — AI uses these to avoid creating duplicates
+  createdAt DateTime     @default(now())
+  emails    EmailTopic[]
+}
+
+model EmailTopic {
+  emailId    String
+  topicId    String
+  confidence Float  @default(1.0)
+  email      Email  @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  topic      Topic  @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  @@id([emailId, topicId])
+}
+
+model Tag {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  color     String     @default("#6B7280")
+  createdAt DateTime   @default(now())
+  emails    EmailTag[]
+}
+
+model EmailTag {
+  emailId String
+  tagId   String
+  email   Email  @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  tag     Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  @@id([emailId, tagId])
+}
+
+model Offer {
+  id      String  @id @default(cuid())
+  emailId String  @unique
+  url     String?
+  promise String? @db.Text
+  ticker  String?
+  email   Email   @relation(fields: [emailId], references: [id], onDelete: Cascade)
+}
