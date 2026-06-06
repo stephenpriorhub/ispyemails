@@ -1,29 +1,22 @@
 export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
+import { requireUser, isAdminRole } from "@/lib/auth";
 import PublishersClient from "@/components/publishers/PublishersClient";
 
 export default async function PublishersPage() {
+  const user = await requireUser();
+  const isAdmin = isAdminRole(user.role);
   const staleThreshold = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000);
 
   const publishers = await prisma.publisher.findMany({
-    include: {
-      _count: { select: { emails: true } },
-      lists: { select: { id: true, name: true } },
-    },
+    include: { _count: { select: { emails: true } }, lists: { select: { id: true, name: true } } },
     orderBy: { name: "asc" },
   });
 
-  // Get last email date per publisher
-  const lastEmails = await Promise.all(
-    publishers.map(async (p) => {
-      const last = await prisma.email.findFirst({
-        where: { publisherId: p.id },
-        orderBy: { receivedAt: "desc" },
-        select: { receivedAt: true },
-      });
-      return { id: p.id, lastEmail: last?.receivedAt ?? null };
-    })
-  );
+  const lastEmails = await Promise.all(publishers.map(async (p) => {
+    const last = await prisma.email.findFirst({ where: { publisherId: p.id }, orderBy: { receivedAt: "desc" }, select: { receivedAt: true } });
+    return { id: p.id, lastEmail: last?.receivedAt ?? null };
+  }));
   const lastEmailMap = Object.fromEntries(lastEmails.map(l => [l.id, l.lastEmail]));
 
   const week = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -39,5 +32,5 @@ export default async function PublishersPage() {
     isStale: lastEmailMap[p.id] !== null && lastEmailMap[p.id]! < staleThreshold,
   }));
 
-  return <PublishersClient publishers={publishersWithMeta} weekMap={weekMap} />;
+  return <PublishersClient publishers={publishersWithMeta} weekMap={weekMap} isAdmin={isAdmin} />;
 }

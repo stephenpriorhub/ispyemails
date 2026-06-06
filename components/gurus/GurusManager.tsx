@@ -22,7 +22,7 @@ interface GuruItem {
   _count: { emails: number };
 }
 
-export default function GurusManager({ gurus: initial, lists, publishers }: { gurus: GuruItem[]; lists: ListRef[]; publishers: Publisher[] }) {
+export default function GurusManager({ gurus: initial, lists, publishers, isAdmin = false }: { gurus: GuruItem[]; lists: ListRef[]; publishers: Publisher[]; isAdmin?: boolean }) {
   const [gurus, setGurus] = useState(initial);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [merging, setMerging] = useState<string | null>(null);
@@ -193,21 +193,21 @@ export default function GurusManager({ gurus: initial, lists, publishers }: { gu
                   </div>
                 )}
               </div>
-              {/* Action buttons — visible on hover */}
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+              {/* Action buttons — admin only */}
+              {isAdmin && <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                 <button onClick={() => openEdit(guru)} className="px-2 py-1 text-xs text-gray-400 hover:text-amber-400 hover:bg-gray-800 rounded transition-colors">Edit</button>
                 <button onClick={() => markSecondary(guru)} disabled={loading === guru.id} className="px-2 py-1 text-xs text-gray-400 hover:text-purple-400 hover:bg-gray-800 rounded transition-colors" title="Mark as secondary voice">2°</button>
                 <button onClick={() => { setMerging(guru.id); setMergeTarget(""); }} className="px-2 py-1 text-xs text-gray-400 hover:text-blue-400 hover:bg-gray-800 rounded transition-colors">Merge</button>
                 <button onClick={() => toggleIgnore(guru)} className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-800 rounded"><EyeOff className="w-3.5 h-3.5" /></button>
                 <button onClick={() => deleteGuru(guru.id, guru.name)} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-800 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
-              </div>
+              </div>}
             </div>
 
-            {/* Expanded panel */}
+            {/* Expanded panel — admin only for editing */}
             {isExpanded && (
               <div className="px-10 pb-4 space-y-4 bg-gray-800/10">
-                {/* Edit name + publisher */}
-                <div className="grid grid-cols-2 gap-3 pt-3">
+                {/* Edit name + publisher — admin only */}
+                {isAdmin && <div className="grid grid-cols-2 gap-3 pt-3">
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">Name</label>
                     <input
@@ -227,14 +227,16 @@ export default function GurusManager({ gurus: initial, lists, publishers }: { gu
                       {publishers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                   </div>
-                </div>
-                <button
-                  onClick={() => saveGuru(guru.id)}
-                  disabled={loading === guru.id}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black text-xs font-medium rounded transition-colors"
-                >
-                  <Check className="w-3 h-3" />Save changes
-                </button>
+                </div>}
+                {isAdmin && (
+                  <button
+                    onClick={() => saveGuru(guru.id)}
+                    disabled={loading === guru.id}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black text-xs font-medium rounded transition-colors"
+                  >
+                    <Check className="w-3 h-3" />Save changes
+                  </button>
+                )}
 
                 {/* Lists */}
                 <div>
@@ -312,9 +314,11 @@ export default function GurusManager({ gurus: initial, lists, publishers }: { gu
           <h1 className="text-2xl font-bold text-white flex items-center gap-2"><User className="w-6 h-6 text-amber-400" />Gurus</h1>
           <p className="text-gray-400 text-sm mt-1">Click Edit to rename and assign publisher. Use 2° to mark as secondary voice.</p>
         </div>
-        <button onClick={() => setShowAdd(!showAdd)} className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-sm font-medium rounded-lg">
-          <Plus className="w-4 h-4" />Add Guru
-        </button>
+        {isAdmin && (
+          <button onClick={() => setShowAdd(!showAdd)} className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-sm font-medium rounded-lg">
+            <Plus className="w-4 h-4" />Add Guru
+          </button>
+        )}
       </div>
 
       {/* Filter */}

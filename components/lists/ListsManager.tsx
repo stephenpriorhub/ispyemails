@@ -23,7 +23,7 @@ interface ListItem {
   lastEmail?: Date | string | null;
 }
 
-export default function ListsManager({ lists: initial, publishers }: { lists: ListItem[]; publishers: Publisher[] }) {
+export default function ListsManager({ lists: initial, publishers, isAdmin = false }: { lists: ListItem[]; publishers: Publisher[]; isAdmin?: boolean }) {
   const [lists, setLists] = useState(initial);
   const [editing, setEditing] = useState<string | null>(null);
   const [merging, setMerging] = useState<string | null>(null);
@@ -91,9 +91,11 @@ export default function ListsManager({ lists: initial, publishers }: { lists: Li
           <h1 className="text-2xl font-bold text-white flex items-center gap-2"><BookOpen className="w-6 h-6 text-amber-400" />Lists</h1>
           <p className="text-gray-400 text-sm mt-1">Newsletters and publications — each belongs to a Publisher</p>
         </div>
-        <button onClick={() => setShowAdd(!showAdd)} className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-sm font-medium rounded-lg transition-colors">
-          <Plus className="w-4 h-4" />Add List
-        </button>
+        {isAdmin && (
+          <button onClick={() => setShowAdd(!showAdd)} className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-sm font-medium rounded-lg transition-colors">
+            <Plus className="w-4 h-4" />Add List
+          </button>
+        )}
       </div>
 
       {/* Filter bar */}
@@ -148,12 +150,14 @@ export default function ListsManager({ lists: initial, publishers }: { lists: Li
                     )}
                   </div>
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => { setEditing(list.id); setEditForm({ name: list.name, category: list.category, publisherId: list.publisher?.id ?? "", notes: list.notes ?? "" }); }} className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-800 rounded"><Pencil className="w-3.5 h-3.5" /></button>
-                  <button onClick={() => { setMerging(list.id); setMergeTarget(""); }} className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-gray-800 rounded"><GitMerge className="w-3.5 h-3.5" /></button>
-                  <button onClick={() => toggleIgnore(list)} className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-800 rounded"><EyeOff className="w-3.5 h-3.5" /></button>
-                  <button onClick={() => deleteList(list.id, list.name)} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-800 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
-                </div>
+                {isAdmin && (
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => { setEditing(list.id); setEditForm({ name: list.name, category: list.category, publisherId: list.publisher?.id ?? "", notes: list.notes ?? "" }); }} className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-800 rounded"><Pencil className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { setMerging(list.id); setMergeTarget(""); }} className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-gray-800 rounded"><GitMerge className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => toggleIgnore(list)} className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-800 rounded"><EyeOff className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => deleteList(list.id, list.name)} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-800 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
+                )}
               </div>
             )}
 

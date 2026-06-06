@@ -39,6 +39,7 @@ interface Props {
     publisherId?:string; topicId?:string; placement?:string; emailType?:string;
     search?:string; listId?:string; guruId?:string; sortBy:string; order:string;
   };
+  isAdmin?: boolean;
 }
 
 export default function EmailList({ emails,total,page,pages,publishers,topics,lists=[],gurus=[],filters }: Props) {

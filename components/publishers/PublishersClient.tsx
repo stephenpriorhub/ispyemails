@@ -22,9 +22,10 @@ interface Publisher {
 interface Props {
   publishers: Publisher[];
   weekMap: Record<string, number>;
+  isAdmin?: boolean;
 }
 
-export default function PublishersClient({ publishers: initial, weekMap }: Props) {
+export default function PublishersClient({ publishers: initial, weekMap, isAdmin = false }: Props) {
   const [publishers, setPublishers] = useState(initial);
   const [editing, setEditing] = useState<string | null>(null);
   const [merging, setMerging] = useState<string | null>(null);
@@ -112,12 +113,14 @@ export default function PublishersClient({ publishers: initial, weekMap }: Props
           </h1>
           <p className="text-gray-400 text-sm mt-1">{publishers.length} publishers — edit, merge, or delete to train the system</p>
         </div>
-        <button
-          onClick={() => setShowAdd(!showAdd)}
-          className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-sm font-medium rounded-lg transition-colors"
-        >
-          <Plus className="w-4 h-4" /> Add Publisher
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setShowAdd(!showAdd)}
+            className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-sm font-medium rounded-lg transition-colors"
+          >
+            <Plus className="w-4 h-4" /> Add Publisher
+          </button>
+        )}
       </div>
 
       {/* Add publisher form */}
@@ -161,8 +164,8 @@ export default function PublishersClient({ publishers: initial, weekMap }: Props
                     )}
                   </div>
                 </div>
-                {/* Actions — show on hover */}
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {/* Actions — admin only */}
+                {isAdmin && <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button onClick={() => startEdit(pub)} className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-800 rounded transition-colors" title="Edit">
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
@@ -172,10 +175,12 @@ export default function PublishersClient({ publishers: initial, weekMap }: Props
                   <button onClick={() => deletePublisher(pub.id, pub.name)} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-800 rounded transition-colors" title="Delete (unassigns emails)">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
-                </div>
+                </div>}
               </div>
             )}
 
+            {/* Edit row — admin only */}
+            {!isAdmin && editing === pub.id && (() => { setEditing(null); return null; })()}
             {/* Edit row */}
             {editing === pub.id && (
               <div className="px-4 py-3 space-y-3 bg-gray-800/40">

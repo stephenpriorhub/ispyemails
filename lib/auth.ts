@@ -58,3 +58,10 @@ export async function requireUser(): Promise<HubUser> {
   }
   return user;
 }
+
+/** Roles that can manage the app — everyone else is read-only */
+const ADMIN_ROLES = new Set(["super_admin", "exec_admin", "admin"]);
+
+export function isAdminRole(role: string | null | undefined): boolean {
+  return ADMIN_ROLES.has(role ?? "");
+}
