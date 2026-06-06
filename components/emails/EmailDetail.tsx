@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, RefreshCw, Check, Tag as TagIcon, Hash } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, ExternalLink, RefreshCw, Check, Tag as TagIcon, Hash, Trash2 } from "lucide-react";
 const pBadge: Record<string,string> = { PRIMARY:"bg-green-500/10 text-green-400 border-green-500/20", PROMOTIONS:"bg-amber-500/10 text-amber-400 border-amber-500/20", SPAM:"bg-red-500/10 text-red-400 border-red-500/20", UNKNOWN:"bg-gray-500/10 text-gray-400 border-gray-500/20" };
 const EMAIL_TYPES = ["LIFT_NOTE","EDITORIAL","PROMO","UNKNOWN"] as const;
 interface Props {
@@ -10,10 +11,19 @@ interface Props {
   allTags:{id:string;name:string;color:string}[];
 }
 export default function EmailDetail({ email, publishers, allTags }: Props) {
+  const router = useRouter();
   const [selectedPublisherId,setSelectedPublisherId] = useState(email.publisher?.id??"");
   const [emailType,setEmailType] = useState(email.emailType);
   const [activeTagIds,setActiveTagIds] = useState(email.tags.map(t=>t.tag.id));
-  const [saving,setSaving] = useState(false), [analyzing,setAnalyzing] = useState(false), [view,setView] = useState<"html"|"text">("html");
+  const [saving,setSaving] = useState(false), [analyzing,setAnalyzing] = useState(false), [deleting,setDeleting] = useState(false), [view,setView] = useState<"html"|"text">("html");
+
+  async function deleteEmail() {
+    if (!confirm(`Delete this email?\n\n"${email.subject}"\n\nThis cannot be undone.`)) return;
+    setDeleting(true);
+    await fetch(`/api/emails/${email.id}`, { method: "DELETE" });
+    router.push("/emails");
+    router.refresh();
+  }
   async function save() {
     setSaving(true);
     await fetch(`/api/emails/${email.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({publisherId:selectedPublisherId||null,publisherConfirmed:true,emailType,emailTypeConfirmed:true,tagIds:activeTagIds})});
@@ -51,6 +61,7 @@ export default function EmailDetail({ email, publishers, allTags }: Props) {
         <div className="space-y-2 pt-2">
           <button onClick={save} disabled={saving} className="w-full flex items-center justify-center gap-2 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black text-sm font-medium rounded transition-colors"><Check className="w-3.5 h-3.5"/>{saving?"Saving…":"Save Changes"}</button>
           <button onClick={reanalyze} disabled={analyzing} className="w-full flex items-center justify-center gap-2 py-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-gray-300 text-sm rounded transition-colors"><RefreshCw className={`w-3.5 h-3.5 ${analyzing?"animate-spin":""}`}/>{analyzing?"Analyzing…":"Re-run AI Analysis"}</button>
+          <button onClick={deleteEmail} disabled={deleting} className="w-full flex items-center justify-center gap-2 py-2 bg-red-500/10 hover:bg-red-500/20 disabled:opacity-50 text-red-400 text-sm rounded border border-red-500/20 transition-colors"><Trash2 className="w-3.5 h-3.5"/>{deleting?"Deleting…":"Delete Email"}</button>
         </div>
       </div>
     </div>

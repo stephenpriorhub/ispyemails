@@ -31,3 +31,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{id:
   await analyzeEmail(email.id, email.subject, email.fromName??"", email.fromEmail, email.bodyText, email.bodyHtml);
   return NextResponse.json(await prisma.email.findUnique({where:{id},include:{publisher:true,topics:{include:{topic:true}},tags:{include:{tag:true}},offer:true}}));
 }
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{id:string}> }) {
+  const { id } = await params;
+  await prisma.email.delete({ where: { id } });
+  return NextResponse.json({ ok: true });
+}
