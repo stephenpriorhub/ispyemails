@@ -1,15 +1,12 @@
 #!/bin/sh
 set -e
 
-# Write DATABASE_URL to .env so prisma.config.ts can read it at runtime
-# (Prisma 7 evaluates config at load time; this ensures the value is available)
-echo "DATABASE_URL=${DATABASE_URL}" > /app/.env
+# Write DATABASE_URL to /tmp/.env (writable by non-root user)
+# so prisma.config.ts dotenv/config picks it up at load time
+echo "DATABASE_URL=${DATABASE_URL}" > /tmp/.env
 
 echo "Running Prisma migrations..."
-node node_modules/prisma/build/index.js migrate deploy
-
-# Remove .env so the app doesn't use it (Next.js uses injected env vars directly)
-rm -f /app/.env
+DOTENV_CONFIG_PATH=/tmp/.env node node_modules/prisma/build/index.js migrate deploy
 
 echo "Starting iSpyEmails..."
 exec node server.js
