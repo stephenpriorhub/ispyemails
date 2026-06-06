@@ -41,16 +41,19 @@ export async function POST() {
     seeded++;
   }
 
-  // 3. Re-assign existing emails to matching publishers by domain
+  // 3. Reset ALL emails to unprocessed so AI re-analyzes with new list/guru detection
+  await prisma.email.updateMany({ data: { isProcessed: false } });
+
+  // 4. Re-assign existing emails to matching publishers by domain
   const allPublishers = await prisma.publisher.findMany();
-  const unassigned = await prisma.email.findMany({ where: { publisherId: null } });
+  const allEmails = await prisma.email.findMany({ select: { id: true, fromEmail: true, publisherId: true } });
   let matched = 0;
-  for (const email of unassigned) {
+  for (const email of allEmails) {
     const domain = email.fromEmail.split("@")[1] ?? "";
     const pub = allPublishers.find((p) =>
       p.domains.some((d) => domain === d || domain.endsWith("." + d))
     );
-    if (pub) {
+    if (pub && pub.id !== email.publisherId) {
       await prisma.email.update({
         where: { id: email.id },
         data: { publisherId: pub.id, publisherConfirmed: true },
@@ -59,5 +62,5 @@ export async function POST() {
     }
   }
 
-  return NextResponse.json({ ok: true, deletedSelfEmails: deleted.count, publishersSeeded: seeded, emailsMatched: matched });
+  return NextResponse.json({ ok: true, deletedSelfEmails: deleted.count, publishersSeeded: seeded, emailsReset: allEmails.length, emailsMatched: matched });
 }
