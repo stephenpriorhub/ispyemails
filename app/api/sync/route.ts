@@ -28,3 +28,9 @@ export async function POST() {
 
   return NextResponse.json({ processed, total: emails.length });
 }
+
+// DELETE: reset historyId to force full inbox backfill on next sync
+export async function DELETE() {
+  await prisma.gmailAccount.updateMany({ data: { historyId: null } });
+  return NextResponse.json({ ok: true, message: "historyId cleared — next sync will backfill all emails" });
+}
