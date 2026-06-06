@@ -1,13 +1,13 @@
 /**
  * iSpyEmails Auth — delegates entirely to OxfordHub
- * Runs in Node.js runtime (Server Components / Route Handlers), not Edge.
+ * Uses /api/me with forwarded session cookie (same pattern as hub-nav.js)
  */
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 const OXFORDHUB_URL = process.env.OXFORDHUB_URL ?? "https://oxfordhub.app";
-const HUB_API_TOKEN = process.env.HUB_API_TOKEN ?? "";
+const PROJECT_ID = "cmq1by18o0002ncdujwyk8b60";
 
 export interface HubUser {
   id: string;
@@ -16,46 +16,25 @@ export interface HubUser {
   role: string;
 }
 
-/**
- * Call from Server Components / layouts to get the current user.
- * Forwards cookies from the incoming request to OxfordHub's verify endpoint.
- * Returns null if not authenticated.
- */
 export async function getSessionUser(): Promise<HubUser | null> {
-  if (!HUB_API_TOKEN) {
-    console.error("[auth] HUB_API_TOKEN not set");
-    return null;
-  }
-
   try {
     const h = await headers();
-    // Use x-forwarded-cookies set by middleware, or fall back to cookie header
     const cookieHeader = h.get("x-forwarded-cookies") || h.get("cookie") || "";
 
-    if (!cookieHeader) {
-      console.log("[auth] No cookies in request");
-      return null;
-    }
+    if (!cookieHeader) return null;
 
-    const res = await fetch(`${OXFORDHUB_URL}/api/verify`, {
-      method: "GET",
-      headers: {
-        "x-hub-token": HUB_API_TOKEN,
-        "cookie": cookieHeader,
-      },
-      cache: "no-store",
-    });
+    const res = await fetch(
+      `${OXFORDHUB_URL}/api/me?projectId=${PROJECT_ID}`,
+      {
+        headers: { cookie: cookieHeader },
+        cache: "no-store",
+      }
+    );
 
-    if (!res.ok) {
-      console.error("[auth] verify returned", res.status);
-      return null;
-    }
+    if (!res.ok) return null;
 
     const data = await res.json();
-    if (!data.authorized || !data.user) {
-      console.log("[auth] not authorized:", JSON.stringify(data).substring(0, 100));
-      return null;
-    }
+    if (!data.authenticated || !data.authorized || !data.user) return null;
 
     return {
       id: data.user.id,
@@ -64,22 +43,18 @@ export async function getSessionUser(): Promise<HubUser | null> {
       role: data.user.role ?? "user",
     };
   } catch (err) {
-    console.error("[auth] verify error:", err);
+    console.error("[auth] error:", err);
     return null;
   }
 }
 
-/**
- * Use in layouts/pages to require authentication.
- * Redirects to OxfordHub login if not authenticated.
- */
 export async function requireUser(): Promise<HubUser> {
   const user = await getSessionUser();
   if (!user) {
     const h = await headers();
-    const url = h.get("x-forwarded-host") ?? h.get("host") ?? "ispy.oxfordhub.app";
+    const host = h.get("x-forwarded-host") ?? h.get("host") ?? "ispy.oxfordhub.app";
     const proto = h.get("x-forwarded-proto") ?? "https";
-    redirect(`${OXFORDHUB_URL}/login?callbackUrl=${encodeURIComponent(`${proto}://${url}`)}`);
+    redirect(`${OXFORDHUB_URL}/login?callbackUrl=${encodeURIComponent(`${proto}://${host}`)}`);
   }
   return user;
 }

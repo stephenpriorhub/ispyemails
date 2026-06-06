@@ -1,2 +1,3 @@
+html { visibility: hidden; }
 @import "tailwindcss";
 body { background: #030712; color: #f9fafb; }
