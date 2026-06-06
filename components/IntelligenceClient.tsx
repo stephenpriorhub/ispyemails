@@ -119,7 +119,7 @@ export default function IntelligenceClient({ pending: initialPending, validated:
           className="flex items-center gap-2 text-sm font-semibold text-gray-400 hover:text-white mb-3 transition-colors"
         >
           {showValidated ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          Validated Knowledge Base ({validated.length})
+          Validated — Fed Into AI Brain ({validated.length})
         </button>
         {showValidated && (
           <div className="bg-gray-900 border border-gray-800 rounded-lg divide-y divide-gray-800">

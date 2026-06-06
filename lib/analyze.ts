@@ -25,16 +25,22 @@ export async function analyzeEmail(
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  const [publishers, lists, gurus, existingTopics, ignoredTopics, ignoredGurus, secondaryVoices] = await Promise.all([
+  const [publishers, lists, gurus, existingTopics, ignoredTopics, ignoredGurus, secondaryVoices, validatedLearnings] = await Promise.all([
     prisma.publisher.findMany({ select: { id: true, name: true, domains: true, knownFromAddresses: true, type: true } }),
     prisma.list.findMany({ where: { isIgnored: false }, select: { id: true, name: true, publisherId: true } }),
     prisma.guru.findMany({ where: { isIgnored: false }, select: { id: true, name: true, isSecondaryVoice: true } }),
     prisma.topic.findMany({ where: { isIgnored: false }, select: { name: true, synonyms: true } }),
     prisma.topic.findMany({ where: { isIgnored: true }, select: { name: true, synonyms: true } }),
     prisma.guru.findMany({ where: { isIgnored: true }, select: { name: true } }),
-    // Load secondary voices with their primary gurus for routing
     prisma.secondaryVoiceGuru.findMany({
       include: { secondaryVoice: { select: { id: true, name: true } }, primaryGuru: { select: { id: true, name: true } } },
+    }),
+    // Validated learnings feed back into the AI as contextual knowledge
+    prisma.learning.findMany({
+      where: { status: "VALIDATED" },
+      select: { content: true, category: true },
+      orderBy: { createdAt: "desc" },
+      take: 50, // cap to keep prompt size manageable
     }),
   ]);
 
@@ -72,6 +78,8 @@ SECONDARY VOICES (contributors/managing editors — NOT primary gurus, do not ta
 EXISTING TOPICS (reuse): ${topicList || "None"}
 IGNORED TOPICS (never use): ${[...ignoredTopicNames].join(", ") || "None"}
 IGNORED GURUS (never use): ${[...ignoredGuruNames].join(", ") || "None"}
+VALIDATED INTELLIGENCE (facts confirmed by the user — use these to inform your analysis):
+${validatedLearnings.length > 0 ? validatedLearnings.map(l => `- [${l.category}] ${l.content}`).join("\n") : "None yet"}
 
 Return ONLY this JSON:
 {
