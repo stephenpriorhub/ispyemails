@@ -15,18 +15,16 @@ export default function SettingsClient({ accounts, connected, error }: Props) {
     setInitResult(null);
     try {
       // 1. Seed publishers + match existing emails by domain
+      // 1. Reset + seed publishers (fast)
       const cleanup = await fetch("/api/cleanup", { method: "POST" });
       const cleanupData = await cleanup.json();
 
-      // 2. Run AI analysis on all unprocessed emails
-      setAnalyzing(true);
-      const analyze = await fetch("/api/sync", { method: "POST" });
-      const analyzeData = await analyze.json();
+      // 2. Fire AI analysis in background — don't await, it takes time
+      fetch("/api/sync", { method: "POST" }).catch(() => {});
 
       setInitResult(
-        `✅ Done — ${cleanupData.publishersSeeded} publishers seeded, ` +
-        `${cleanupData.emailsMatched} emails domain-matched, ` +
-        `${analyzeData.processed} emails AI-analyzed.`
+        `✅ Seeded ${cleanupData.publishersSeeded} publishers, reset ${cleanupData.emailsReset ?? "all"} emails. ` +
+        `AI analysis is running in the background — check Lists & Gurus tabs in ~1 minute.`
       );
     } catch (err) {
       setInitResult(`❌ Error: ${err instanceof Error ? err.message : "Unknown"}`);
