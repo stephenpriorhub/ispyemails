@@ -45,7 +45,7 @@ export default function Sidebar({ user, isAdmin = false }: Props) {
       <div className="p-4 border-b border-gray-800">
         <div className="flex items-center gap-2">
           <Eye className="w-5 h-5 text-amber-400" />
-          <span className="font-bold text-white text-sm">iSpyEmails</span>
+          <span className="font-bold text-white text-sm">iSpyFinpub</span>
         </div>
       </div>
 

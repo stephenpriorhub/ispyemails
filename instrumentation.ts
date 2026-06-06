@@ -42,7 +42,7 @@ export async function register() {
         const sqlFile = path.join(migrationsDir, dir, "migration.sql");
         if (!fs.existsSync(sqlFile)) continue;
 
-        console.log(`[iSpyEmails] Applying migration: ${dir}`);
+        console.log(`[iSpyFinpub] Applying migration: ${dir}`);
         const sql = fs.readFileSync(sqlFile, "utf-8");
 
         // Split on semicolons, run each statement
@@ -56,13 +56,13 @@ export async function register() {
           VALUES (gen_random_uuid()::text, 'manual', NOW(), $1, 1)
         `, dir);
 
-        console.log(`[iSpyEmails] ✓ ${dir}`);
+        console.log(`[iSpyFinpub] ✓ ${dir}`);
       }
 
-      console.log("[iSpyEmails] Migrations complete.");
+      console.log("[iSpyFinpub] Migrations complete.");
     }
   } catch (err) {
-    console.error("[iSpyEmails] Migration error:", err);
+    console.error("[iSpyFinpub] Migration error:", err);
   }
 
   const INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 hours
@@ -74,9 +74,9 @@ export async function register() {
       const data = await res.json();
       const results = data.results ?? [];
       const totalNew = results.reduce((sum: number, r: { newEmails?: number }) => sum + (r.newEmails ?? 0), 0);
-      if (totalNew > 0) console.log(`[iSpyEmails] Auto-sync: ${totalNew} new email(s)`);
+      if (totalNew > 0) console.log(`[iSpyFinpub] Auto-sync: ${totalNew} new email(s)`);
     } catch (err) {
-      console.error("[iSpyEmails] Auto-sync failed:", err);
+      console.error("[iSpyFinpub] Auto-sync failed:", err);
     }
   }
 
@@ -84,6 +84,6 @@ export async function register() {
   setTimeout(() => {
     runSync();
     setInterval(runSync, INTERVAL_MS);
-    console.log(`[iSpyEmails] Auto-sync started — every 15 minutes`);
+    console.log(`[iSpyFinpub] Auto-sync started — every 15 minutes`);
   }, 10_000);
 }
