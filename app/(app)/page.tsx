@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Mail, Users, TrendingUp, Inbox } from "lucide-react";
 import DashboardClient from "@/components/dashboard/DashboardClient";
+import LocalTime from "@/components/dashboard/LocalTime";
 
 const placementColors: Record<string,string> = {
   PRIMARY:"text-green-400 bg-green-400/10",
@@ -29,15 +30,21 @@ export default async function DashboardPage({
   const week = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const staleThreshold = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000);
 
+  // Stats bar always shows current numbers regardless of selected date
+  const now2 = new Date();
+  const todayStart = new Date(now2.getFullYear(), now2.getMonth(), now2.getDate());
+  const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+
   const [
-    totalEmails, dayEmails, weekEmails, totalPublishers,
-    recentEmails, placementBreakdown, topTopics,
+    totalEmails, todayEmails, weekEmails, totalPublishers,
+    dayEmails, recentEmails, placementBreakdown, topTopics,
     stalePublishers, staleLists,
   ] = await Promise.all([
     prisma.email.count(),
-    prisma.email.count({ where: { receivedAt: { gte: dayStart, lt: dayEnd } } }),
+    prisma.email.count({ where: { receivedAt: { gte: todayStart, lt: todayEnd } } }),
     prisma.email.count({ where: { receivedAt: { gte: week } } }),
     prisma.publisher.count(),
+    prisma.email.count({ where: { receivedAt: { gte: dayStart, lt: dayEnd } } }),
     prisma.email.findMany({
       where: { receivedAt: { gte: dayStart, lt: dayEnd } },
       orderBy: { receivedAt: "desc" },
@@ -98,36 +105,22 @@ export default async function DashboardPage({
     name: topicDetails.find(td => td.id === t.topicId)?.name ?? "unknown",
   }));
 
+  // Stats bar always reflects current state, independent of date navigator
   const stats = [
-    { label: isToday ? "Total Emails" : "Day Total", value: isToday ? totalEmails.toLocaleString() : dayEmails, icon: Mail },
-    { label: isToday ? "Received Today" : "This Date", value: dayEmails, icon: Inbox },
+    { label: "All-Time Emails Received", value: totalEmails.toLocaleString(), icon: Mail },
+    { label: "Received Today", value: todayEmails, icon: Inbox },
     { label: "This Week", value: weekEmails, icon: TrendingUp },
     { label: "Publishers Tracked", value: totalPublishers, icon: Users },
   ];
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header with date nav */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Daily Brief</h1>
-          <p className="text-gray-400 text-sm mt-1">
-            {selectedDate.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-            {isToday && <span className="ml-2 text-xs text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">Today</span>}
-          </p>
-        </div>
-        {/* Date navigation */}
-        <div className="flex items-center gap-2">
-          <Link href={`/?date=${prevDay.toISOString().split("T")[0]}`} className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm rounded transition-colors">← Prev</Link>
-          <DashboardClient currentDate={dayStart.toISOString().split("T")[0]} />
-          {!isToday && (
-            <Link href={nextDay <= new Date() ? `/?date=${nextDay.toISOString().split("T")[0]}` : "/"} className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm rounded transition-colors">Next →</Link>
-          )}
-          {!isToday && <Link href="/" className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black text-sm font-medium rounded transition-colors">Today</Link>}
-        </div>
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-white">Daily Brief</h1>
       </div>
 
-      {/* Stale alerts — only show when there are stale items */}
+      {/* Stale alerts — always current, independent of date */}
       {isToday && (stalePublisherDetails.length > 0 || staleListDetails.length > 0) && (
         <DashboardClient
           stalePublishers={stalePublisherDetails}
@@ -136,7 +129,7 @@ export default async function DashboardPage({
         />
       )}
 
-      {/* Stat cards */}
+      {/* Stat cards — always current, not affected by date navigator */}
       <div className="grid grid-cols-4 gap-4">
         {stats.map(({ label, value, icon: Icon }) => (
           <div key={label} className="bg-gray-900 border border-gray-800 rounded-lg p-4">
@@ -144,6 +137,24 @@ export default async function DashboardPage({
             <div className="text-2xl font-bold text-white">{value}</div>
           </div>
         ))}
+      </div>
+
+      {/* Date navigator — below stats bar */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-gray-300 text-sm font-medium">
+            {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+            {isToday && <span className="ml-2 text-xs text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">Today</span>}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link href={`/?date=${prevDay.toISOString().split("T")[0]}`} className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm rounded transition-colors">← Prev</Link>
+          <DashboardClient currentDate={dayStart.toISOString().split("T")[0]} />
+          {!isToday && (
+            <Link href={nextDay <= new Date() ? `/?date=${nextDay.toISOString().split("T")[0]}` : "/"} className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm rounded transition-colors">Next →</Link>
+          )}
+          {!isToday && <Link href="/" className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black text-sm font-medium rounded transition-colors">Today</Link>}
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-6">
@@ -166,8 +177,7 @@ export default async function DashboardPage({
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-white truncate">{email.subject}</p>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    {email.publisher?.name ?? email.list?.name ?? "Unknown"} ·{" "}
-                    {new Date(email.receivedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    {email.publisher?.name ?? email.list?.name ?? "Unknown"} · <LocalTime date={email.receivedAt} />
                   </p>
                 </div>
                 <div className="flex gap-1 flex-wrap justify-end max-w-32">
