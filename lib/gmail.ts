@@ -22,8 +22,9 @@ export async function getAuthedClient(accountEmail: string) {
 export function placementFromLabels(labelIds: string[]): string {
   if (labelIds.includes("SPAM")) return "SPAM";
   if (labelIds.includes("CATEGORY_PROMOTIONS")) return "PROMOTIONS";
-  if (labelIds.includes("CATEGORY_UPDATES")) return "UPDATES";
-  if (labelIds.includes("CATEGORY_SOCIAL")) return "SOCIAL";
+  // UPDATES and SOCIAL are treated as PRIMARY — these are inbox tabs, not junk
+  if (labelIds.includes("CATEGORY_UPDATES")) return "PRIMARY";
+  if (labelIds.includes("CATEGORY_SOCIAL")) return "PRIMARY";
   if (labelIds.includes("INBOX")) return "PRIMARY";
   return "UNKNOWN";
 }

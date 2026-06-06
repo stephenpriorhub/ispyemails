@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Search, ChevronLeft, ChevronRight, X } from "lucide-react";
 
-const PLACEMENTS = ["PRIMARY","PROMOTIONS","SPAM","UPDATES","SOCIAL","UNKNOWN"];
+const PLACEMENTS = ["PRIMARY","PROMOTIONS","SPAM","UNKNOWN"];
 const TYPES = ["LIFT_NOTE","EDITORIAL","PROMO","UNKNOWN"];
 const pBadge: Record<string,string> = {
   PRIMARY:"bg-green-500/10 text-green-400 border-green-500/20",
@@ -145,7 +145,7 @@ export default function EmailList({ emails,total,page,pages,publishers,topics,li
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-gray-900 border-b border-gray-800">
             <tr>
-              <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium w-28">Placement</th>
+              <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium w-28">Gmail Placement</th>
               <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium w-[38%]">Subject</th>
               <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium w-36">List</th>
               <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium w-20">Type</th>
