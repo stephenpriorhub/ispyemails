@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Settings, Mail, CheckCircle, AlertCircle, Plus, Database, RefreshCw } from "lucide-react";
+import { Settings, Mail, CheckCircle, AlertCircle, Plus, Database, RefreshCw, Brain } from "lucide-react";
 
 interface Account { email:string;isActive:boolean;lastSyncAt:Date|null;historyId:string|null }
 interface Props { accounts:Account[];connected:boolean;error?:string;isAdmin?:boolean }
@@ -9,6 +9,26 @@ export default function SettingsClient({ accounts, connected, error, isAdmin = f
   const [initializing, setInitializing] = useState(false);
   const [initResult, setInitResult] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [extractResult, setExtractResult] = useState<string | null>(null);
+
+  async function runExtractLearnings() {
+    setExtracting(true);
+    setExtractResult(null);
+    try {
+      const res = await fetch("/api/learnings/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ days: 30 }),
+      });
+      const data = await res.json();
+      setExtractResult(`✅ Scanned ${data.scanned} emails — extracted ${data.extracted} new intelligence insights.`);
+    } catch (err) {
+      setExtractResult(`❌ Error: ${err instanceof Error ? err.message : "Unknown"}`);
+    } finally {
+      setExtracting(false);
+    }
+  }
 
   async function runInitialize() {
     setInitializing(true);
@@ -109,6 +129,28 @@ export default function SettingsClient({ accounts, connected, error, isAdmin = f
         </button>
         {initResult && (
           <p className="mt-3 text-xs text-gray-300">{initResult}</p>
+        )}
+      </div>}
+
+      {/* Extract learnings from past emails */}
+      {isAdmin && <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 mb-6">
+        <h2 className="font-semibold text-white flex items-center gap-2 mb-1">
+          <Brain className="w-4 h-4 text-amber-400" />Extract Intelligence from Past Emails
+        </h2>
+        <p className="text-xs text-gray-500 mb-4">
+          Scans the last 30 days of emails and extracts significant insights into the Intelligence feed —
+          without re-running full analysis. Use this to backfill learnings from emails already processed.
+        </p>
+        <button
+          onClick={runExtractLearnings}
+          disabled={extracting}
+          className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black text-sm font-medium rounded transition-colors"
+        >
+          <Brain className={`w-3.5 h-3.5 ${extracting ? "animate-pulse" : ""}`} />
+          {extracting ? "Scanning emails…" : "Extract Intelligence (Last 30 Days)"}
+        </button>
+        {extractResult && (
+          <p className="mt-3 text-xs text-gray-300">{extractResult}</p>
         )}
       </div>}
     </div>
