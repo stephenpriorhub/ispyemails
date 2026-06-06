@@ -147,7 +147,7 @@ export default function EmailList({ emails,total,page,pages,publishers,topics,li
             <tr>
               <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium w-28">Placement</th>
               <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium">Subject</th>
-              <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium w-36">Publisher / List</th>
+              <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium w-36">List</th>
               <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium w-24">Type</th>
               <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium w-44">Topics</th>
               <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium w-24">Date</th>
@@ -160,18 +160,18 @@ export default function EmailList({ emails,total,page,pages,publishers,topics,li
                   <span className={`inline-flex items-center px-1.5 py-0.5 rounded border text-xs font-medium ${pBadge[email.inboxPlacement]??pBadge.UNKNOWN}`}>{email.inboxPlacement}</span>
                 </td>
                 <td className="px-4 py-2.5">
-                  <Link href={`/emails/${email.id}`} className="text-white hover:text-amber-400 transition-colors line-clamp-1">{email.subject}</Link>
+                  {email.publisher && (
+                    <button onClick={()=>updateFilter("publisher",email.publisher!.id)} className="inline-flex mb-1 px-1.5 py-0.5 text-xs bg-gray-800 text-gray-500 hover:text-amber-400 rounded border border-gray-700/50 hover:border-amber-500/30 transition-colors leading-none">{email.publisher.name}</button>
+                  )}
+                  <Link href={`/emails/${email.id}`} className="text-white hover:text-amber-400 transition-colors line-clamp-1 block">{email.subject}</Link>
                   <p className="text-xs text-gray-500 mt-0.5 truncate">{email.fromName?`${email.fromName} <${email.fromEmail}>`:email.fromEmail}</p>
                 </td>
                 <td className="px-4 py-2.5">
-                  <div>
-                    {email.publisher ? (
-                      <button onClick={()=>updateFilter("publisher",email.publisher!.id)} className="text-xs text-amber-400 hover:underline block">{email.publisher.name}</button>
-                    ) : <span className="text-xs text-gray-600">Unassigned</span>}
-                    {email.list && (
-                      <button onClick={()=>updateFilter("list",email.list!.id)} className="text-xs text-gray-500 hover:text-gray-300 hover:underline">{email.list.name}</button>
-                    )}
-                  </div>
+                  {email.list ? (
+                    <button onClick={()=>updateFilter("list",email.list!.id)} className="text-xs text-gray-400 hover:text-amber-400 hover:underline">{email.list.name}</button>
+                  ) : (
+                    <span className="text-xs text-gray-600">—</span>
+                  )}
                 </td>
                 <td className="px-4 py-2.5">
                   <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs ${tBadge[email.emailType]??tBadge.UNKNOWN}`}>{email.emailType.replace("_"," ")}</span>
