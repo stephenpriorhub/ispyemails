@@ -13,6 +13,12 @@ export async function GET(req: NextRequest) {
     const profile = await gmail.users.getProfile({ userId: "me" });
     const email = profile.data.emailAddress!;
     await prisma.gmailAccount.upsert({ where: { email }, update: { accessToken: tokens.access_token!, refreshToken: tokens.refresh_token ?? "", tokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null, historyId: profile.data.historyId ?? null, isActive: true }, create: { email, accessToken: tokens.access_token!, refreshToken: tokens.refresh_token ?? "", tokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null, historyId: profile.data.historyId ?? null } });
-    return NextResponse.redirect(new URL("/settings?connected=true", req.url));
-  } catch (err) { console.error(err); return NextResponse.redirect(new URL("/settings?error=oauth_failed", req.url)); }
+    // Use public URL for redirect — req.url may contain Railway's internal hostname
+    const base = process.env.NEXTAUTH_URL ?? `https://ispy.oxfordhub.app`;
+    return NextResponse.redirect(`${base}/settings?connected=true`);
+  } catch (err) {
+    console.error(err);
+    const base = process.env.NEXTAUTH_URL ?? `https://ispy.oxfordhub.app`;
+    return NextResponse.redirect(`${base}/settings?error=oauth_failed`);
+  }
 }
