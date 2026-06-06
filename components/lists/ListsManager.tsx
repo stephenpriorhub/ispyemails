@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { BookOpen, GitMerge, Pencil, Trash2, EyeOff, Eye, X, Check, Plus, ChevronDown } from "lucide-react";
+import StaleIcon from "@/components/StaleIcon";
 
 const CATEGORIES = ["FREE_EDITORIAL", "PAID_EDITORIAL", "HOTLIST", "MARKETING_FILE"] as const;
 const catLabel = (c: string) => c.replace("_", " ");
@@ -18,6 +19,8 @@ interface ListItem {
   publisher: Publisher | null;
   gurus: { guru: Guru }[];
   _count: { emails: number };
+  isStale?: boolean;
+  lastEmail?: Date | string | null;
 }
 
 export default function ListsManager({ lists: initial, publishers }: { lists: ListItem[]; publishers: Publisher[] }) {
@@ -133,6 +136,7 @@ export default function ListsManager({ lists: initial, publishers }: { lists: Li
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-white">{list.name}</span>
+                    {list.isStale && list.lastEmail && <StaleIcon lastEmail={list.lastEmail} />}
                     <a href={`/emails?list=${list.id}`} className="text-gray-600 hover:text-amber-400 transition-colors text-sm" title="View emails">→</a>
                     <span className={`text-xs px-1.5 py-0.5 rounded ${catColor[list.category] ?? ""}`}>{catLabel(list.category)}</span>
                     {list.publisher && <span className="text-xs text-gray-500">↳ {list.publisher.name}</span>}

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Users, Mail, TrendingUp, Pencil, Trash2, GitMerge, Check, X, Plus } from "lucide-react";
+import StaleIcon from "@/components/StaleIcon";
 
 const PUB_TYPES = ["INTERNAL", "COMPETITOR", "AFFILIATE_MARKETER"] as const;
 const typeLabel = (t: string) => t === "AFFILIATE_MARKETER" ? "Affiliate" : t === "INTERNAL" ? "Internal" : "Competitor";
@@ -14,6 +15,8 @@ interface Publisher {
   website: string | null; notes: string | null; isConfirmed: boolean;
   lists: { id: string; name: string }[];
   _count: { emails: number };
+  isStale?: boolean;
+  lastEmail?: Date | string | null;
 }
 
 interface Props {
@@ -143,6 +146,7 @@ export default function PublishersClient({ publishers: initial, weekMap }: Props
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-white">{pub.name}</span>
+                    {pub.isStale && pub.lastEmail && <StaleIcon lastEmail={pub.lastEmail} />}
                     <Link href={`/emails?publisher=${pub.id}`} className="text-gray-600 hover:text-amber-400 transition-colors" title="View emails">→</Link>
                     <span className={`text-xs px-1.5 py-0.5 rounded ${typeColor[pub.type] ?? typeColor.COMPETITOR}`}>{typeLabel(pub.type)}</span>
                     {!pub.isConfirmed && (
