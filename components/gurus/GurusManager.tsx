@@ -182,7 +182,6 @@ export default function GurusManager({ gurus: initial, lists, publishers, isAdmi
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-medium text-white">{guru.name}</span>
                   {guru.publisher && <span className="text-xs text-gray-500">· {guru.publisher.name}</span>}
-                  <a href={`/emails?guru=${guru.id}`} onClick={e=>e.stopPropagation()} className="px-2 py-0.5 text-xs bg-gray-800 hover:bg-amber-500/10 text-gray-400 hover:text-amber-400 rounded border border-gray-700 hover:border-amber-500/30 transition-colors">View emails →</a>
                   <span className="text-xs text-gray-600">{guru._count.emails} emails</span>
                 </div>
                 {!isExpanded && activeLists.length > 0 && (
@@ -193,14 +192,17 @@ export default function GurusManager({ gurus: initial, lists, publishers, isAdmi
                   </div>
                 )}
               </div>
-              {/* Action buttons — admin only */}
-              {isAdmin && <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+              {/* Action buttons */}
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <a href={`/emails?guru=${guru.id}`} onClick={e=>e.stopPropagation()} className="p-1.5 text-gray-500 hover:text-amber-400 hover:bg-gray-800 rounded transition-colors" title="View emails">→</a>
+                {isAdmin && <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button onClick={() => openEdit(guru)} className="px-2 py-1 text-xs text-gray-400 hover:text-amber-400 hover:bg-gray-800 rounded transition-colors">Edit</button>
                 <button onClick={() => markSecondary(guru)} disabled={loading === guru.id} className="px-2 py-1 text-xs text-gray-400 hover:text-purple-400 hover:bg-gray-800 rounded transition-colors" title="Mark as secondary voice">2°</button>
                 <button onClick={() => { setMerging(guru.id); setMergeTarget(""); }} className="px-2 py-1 text-xs text-gray-400 hover:text-blue-400 hover:bg-gray-800 rounded transition-colors">Merge</button>
                 <button onClick={() => toggleIgnore(guru)} className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-800 rounded"><EyeOff className="w-3.5 h-3.5" /></button>
                 <button onClick={() => deleteGuru(guru.id, guru.name)} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-800 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>}
+              </div>
             </div>
 
             {/* Expanded panel — admin only for editing */}

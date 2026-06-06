@@ -147,7 +147,6 @@ export default function ListsManager({ lists: initial, publishers, primaryGurus 
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-white">{list.name}</span>
                     {list.isStale && list.lastEmail && <StaleIcon lastEmail={list.lastEmail} />}
-                    <a href={`/emails?list=${list.id}`} className="ml-1 px-2 py-0.5 text-xs bg-gray-800 hover:bg-amber-500/10 text-gray-400 hover:text-amber-400 rounded border border-gray-700 hover:border-amber-500/30 transition-colors">View emails →</a>
                     <span className={`text-xs px-1.5 py-0.5 rounded ${catColor[list.category] ?? ""}`}>{catLabel(list.category)}</span>
                     {list.publisher && <span className="text-xs text-gray-500">↳ {list.publisher.name}</span>}
                   </div>
@@ -158,7 +157,9 @@ export default function ListsManager({ lists: initial, publishers, primaryGurus 
                     )}
                   </div>
                 </div>
-                {isAdmin && (
+                <div className="flex items-center gap-1">
+                  <a href={`/emails?list=${list.id}`} className="p-1.5 text-gray-500 hover:text-amber-400 hover:bg-gray-800 rounded transition-colors" title="View emails">→</a>
+                  {isAdmin && (
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={() => { setEditing(list.id); setEditForm({ name: list.name, category: list.category, publisherId: list.publisher?.id ?? "", notes: list.notes ?? "" }); }} className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-800 rounded"><Pencil className="w-3.5 h-3.5" /></button>
                     <button onClick={() => { setMerging(list.id); setMergeTarget(""); }} className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-gray-800 rounded"><GitMerge className="w-3.5 h-3.5" /></button>
@@ -166,6 +167,7 @@ export default function ListsManager({ lists: initial, publishers, primaryGurus 
                     <button onClick={() => deleteList(list.id, list.name)} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-800 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
                 )}
+                </div>
               </div>
             )}
 
