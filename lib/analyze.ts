@@ -75,7 +75,7 @@ Return ONLY this JSON:
 {
   "publisher": "Publisher name from list or null",
   "publisherConfidence": 0.0,
-  "list": "Newsletter/list name (check masthead/header) or null",
+  "list": "Newsletter/list name or null — check masthead, header, AND subject line (e.g. 'Welcome to TRADE OF THE DAY' → list is 'Trade of the Day')",
   "listConfidence": 0.0,
   "gurus": ["Editor or author names found in the email"],
   "emailType": "LIFT_NOTE|EDITORIAL|PROMO|WELCOME|UNKNOWN",
@@ -140,7 +140,7 @@ DEFINITIONS:
         if (!existingList.publisherId && publisherId) {
           await prisma.list.update({ where: { id: listId }, data: { publisherId } });
         }
-      } else if (result.listConfidence >= 0.7) {
+      } else if (result.listConfidence >= 0.5) { // lower threshold — list names in subjects are reliable
         const newList = await prisma.list.create({
           data: { name: result.list, publisherId, isIgnored: false },
         });
