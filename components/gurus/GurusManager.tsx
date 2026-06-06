@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { User, GitMerge, Trash2, EyeOff, Eye, X, Check, Plus, ChevronDown, Users } from "lucide-react";
+import { User, GitMerge, Trash2, EyeOff, Eye, X, Check, Plus, ChevronDown, Users, Pencil } from "lucide-react";
 
 interface ListRef { id: string; name: string; publisher: { id: string; name: string } | null }
 interface GuruListItem { listId: string; guruId: string; isPrimary: boolean; isIgnored: boolean; list: ListRef }
@@ -30,6 +30,8 @@ export default function GurusManager({ gurus: initial, lists, publishers }: { gu
   const [selectedSecondaryId, setSelectedSecondaryId] = useState("");
   const [addingPrimaryFor, setAddingPrimaryFor] = useState<string | null>(null); // secondary voice id
   const [selectedPrimaryId, setSelectedPrimaryId] = useState("");
+  const [editingNameId, setEditingNameId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
 
   const primaryGurus = gurus.filter(g => !g.isSecondaryVoice && !g.isIgnored);
   const secondaryVoices = gurus.filter(g => g.isSecondaryVoice && !g.isIgnored);
@@ -46,6 +48,19 @@ export default function GurusManager({ gurus: initial, lists, publishers }: { gu
     const g = await res.json();
     setGurus([...gurus, { ...g, lists: [], primaryGurus: [], secondaryVoices: [], _count: { emails: 0 } }].sort((a, b) => a.name.localeCompare(b.name)));
     setAddName(""); setAddIsSecondary(false); setShowAdd(false);
+  }
+
+  async function saveName(id: string) {
+    if (!editingName.trim()) return;
+    await fetch(`/api/gurus/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: editingName.trim() }) });
+    setGurus(gurus.map(g => g.id === id ? { ...g, name: editingName.trim() } : g));
+    setEditingNameId(null);
+  }
+
+  async function toggleSecondaryVoice(guru: GuruItem) {
+    const newVal = !guru.isSecondaryVoice;
+    await fetch(`/api/gurus/${guru.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isSecondaryVoice: newVal }) });
+    setGurus(gurus.map(g => g.id === guru.id ? { ...g, isSecondaryVoice: newVal } : g));
   }
 
   async function assignList(guruId: string, listId: string, isPrimary = false) {
@@ -128,7 +143,18 @@ export default function GurusManager({ gurus: initial, lists, publishers }: { gu
               <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform flex-shrink-0 ${isExpanded ? "rotate-180" : ""}`} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-white">{guru.name}</span>
+                  {editingNameId === guru.id ? (
+                    <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                      <input autoFocus value={editingName} onChange={e => setEditingName(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") saveName(guru.id); if (e.key === "Escape") setEditingNameId(null); }}
+                        className="px-2 py-0.5 bg-gray-800 border border-amber-500 rounded text-sm text-white focus:outline-none w-40" />
+                      <button onClick={() => saveName(guru.id)} className="p-1 text-amber-400 hover:text-amber-300"><Check className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setEditingNameId(null)} className="p-1 text-gray-500 hover:text-gray-300"><X className="w-3.5 h-3.5" /></button>
+                    </div>
+                  ) : (
+                    <span className="font-medium text-white">{guru.name}</span>
+                  )}
+                  <a href={`/emails?guru=${guru.id}`} className="text-gray-600 hover:text-amber-400 text-sm" title="View emails" onClick={e => e.stopPropagation()}>→</a>
                   <span className="text-xs text-gray-600">{guru._count.emails} emails</span>
                 </div>
                 {!isExpanded && activeLists.length > 0 && (
@@ -142,6 +168,8 @@ export default function GurusManager({ gurus: initial, lists, publishers }: { gu
                 )}
               </div>
               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" onClick={e => e.stopPropagation()}>
+                <button onClick={() => { setEditingNameId(guru.id); setEditingName(guru.name); }} className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-800 rounded" title="Rename"><Pencil className="w-3.5 h-3.5" /></button>
+                <button onClick={() => toggleSecondaryVoice(guru)} className="p-1.5 text-gray-400 hover:text-purple-400 hover:bg-gray-800 rounded text-xs" title="Make secondary voice">2°</button>
                 <button onClick={() => { setMerging(guru.id); setMergeTarget(""); }} className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-gray-800 rounded"><GitMerge className="w-3.5 h-3.5" /></button>
                 <button onClick={() => toggleIgnore(guru)} className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-800 rounded" title="Ignore everywhere"><EyeOff className="w-3.5 h-3.5" /></button>
                 <button onClick={() => deleteGuru(guru.id, guru.name)} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-800 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
@@ -293,7 +321,17 @@ export default function GurusManager({ gurus: initial, lists, publishers }: { gu
                   <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform flex-shrink-0 ${isExpanded ? "rotate-180" : ""}`} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-300">{sv.name}</span>
+                      {editingNameId === sv.id ? (
+                        <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                          <input autoFocus value={editingName} onChange={e => setEditingName(e.target.value)}
+                            onKeyDown={e => { if (e.key === "Enter") saveName(sv.id); if (e.key === "Escape") setEditingNameId(null); }}
+                            className="px-2 py-0.5 bg-gray-800 border border-amber-500 rounded text-sm text-white focus:outline-none w-40" />
+                          <button onClick={() => saveName(sv.id)} className="p-1 text-amber-400 hover:text-amber-300"><Check className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => setEditingNameId(null)} className="p-1 text-gray-500 hover:text-gray-300"><X className="w-3.5 h-3.5" /></button>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-300">{sv.name}</span>
+                      )}
                       <span className="text-xs text-gray-600">{sv._count.emails} emails</span>
                     </div>
                     {!isExpanded && sv.primaryGurus.length > 0 && (
@@ -301,6 +339,8 @@ export default function GurusManager({ gurus: initial, lists, publishers }: { gu
                     )}
                   </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" onClick={e => e.stopPropagation()}>
+                    <button onClick={() => { setEditingNameId(sv.id); setEditingName(sv.name); }} className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-800 rounded" title="Rename"><Pencil className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => toggleSecondaryVoice(sv)} className="p-1.5 text-gray-400 hover:text-green-400 hover:bg-gray-800 rounded text-xs" title="Promote to primary guru">↑</button>
                     <button onClick={() => toggleIgnore(sv)} className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-800 rounded"><EyeOff className="w-3.5 h-3.5" /></button>
                     <button onClick={() => deleteGuru(sv.id, sv.name)} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-800 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>

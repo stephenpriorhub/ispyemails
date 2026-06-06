@@ -133,6 +133,7 @@ export default function ListsManager({ lists: initial, publishers }: { lists: Li
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-white">{list.name}</span>
+                    <a href={`/emails?list=${list.id}`} className="text-gray-600 hover:text-amber-400 transition-colors text-sm" title="View emails">→</a>
                     <span className={`text-xs px-1.5 py-0.5 rounded ${catColor[list.category] ?? ""}`}>{catLabel(list.category)}</span>
                     {list.publisher && <span className="text-xs text-gray-500">↳ {list.publisher.name}</span>}
                   </div>
