@@ -6,8 +6,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const guru = await prisma.guru.findUnique({
     where: { id },
     include: {
-      lists: { include: { list: { include: { publisher: true, _count: { select: { emails: true } } } } } },
-      emails: { take: 20, include: { email: { select: { id: true, subject: true, receivedAt: true, publisher: { select: { name: true } }, list: { select: { name: true } } } } }, orderBy: { email: { receivedAt: "desc" } } },
+      publisher: true,
+      lists: { include: { list: { include: { publisher: true } } } },
+      primaryGurus: { include: { primaryGuru: true } },
+      secondaryVoices: { include: { secondaryVoice: true } },
       _count: { select: { emails: true } },
     },
   });
@@ -17,19 +19,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const body = await req.json();
+  const { name, notes, isIgnored, isSecondaryVoice, publisherId } = await req.json();
+  const data: Record<string, unknown> = {};
+  if (name !== undefined) data.name = name;
+  if (notes !== undefined) data.notes = notes;
+  if (isIgnored !== undefined) data.isIgnored = isIgnored;
+  if (isSecondaryVoice !== undefined) data.isSecondaryVoice = isSecondaryVoice;
+  if (publisherId !== undefined) data.publisherId = publisherId || null;
 
-  // Handle list assignments if provided
-  if (body.listIds !== undefined) {
-    await prisma.guruList.deleteMany({ where: { guruId: id } });
-    for (const listId of body.listIds) {
-      await prisma.guruList.create({ data: { guruId: id, listId, isPrimary: body.primaryListId === listId } });
-    }
-    delete body.listIds;
-    delete body.primaryListId;
-  }
-
-  const guru = await prisma.guru.update({ where: { id }, data: body });
+  const guru = await prisma.guru.update({ where: { id }, data });
   return NextResponse.json(guru);
 }
 

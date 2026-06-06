@@ -6,6 +6,7 @@ export default async function GurusPage() {
   const [gurus, lists, publishers] = await Promise.all([
     prisma.guru.findMany({
       include: {
+        publisher: { select: { id: true, name: true } },
         lists: { include: { list: { select: { id: true, name: true, publisher: { select: { id: true, name: true } } } } } },
         primaryGurus: { include: { primaryGuru: { select: { id: true, name: true } } } },
         secondaryVoices: { include: { secondaryVoice: { select: { id: true, name: true } } } },
@@ -20,5 +21,6 @@ export default async function GurusPage() {
     }),
     prisma.publisher.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
-  return <GurusManager gurus={gurus} lists={lists} publishers={publishers} />;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return <GurusManager gurus={gurus as any} lists={lists} publishers={publishers} />;
 }

@@ -65,6 +65,7 @@ model Publisher {
 
   lists  List[]
   emails Email[]
+  gurus  Guru[]
 }
 
 // ─── Lists (newsletters) ──────────────────────────────────────────────────────
@@ -98,7 +99,9 @@ model Guru {
   name             String     @unique
   notes            String?
   isIgnored        Boolean    @default(false)
-  isSecondaryVoice Boolean    @default(false) // contributor/managing editor, not primary voice
+  isSecondaryVoice Boolean    @default(false)
+  publisherId      String?
+  publisher        Publisher? @relation(fields: [publisherId], references: [id])
   createdAt        DateTime   @default(now())
 
   lists           GuruList[]
