@@ -177,11 +177,11 @@ export default function EmailList({ emails,total,page,pages,publishers,topics,li
                   <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs ${tBadge[email.emailType]??tBadge.UNKNOWN}`}>{email.emailType.replace("_"," ")}</span>
                 </td>
                 <td className="px-4 pt-3 pb-2.5">
-                  <div className="flex gap-1 flex-wrap">
-                    {email.topics.slice(0,3).map(({topic})=>(
-                      <button key={topic.id} onClick={()=>updateFilter("topic",topic.id)} className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-1.5 py-0.5 rounded capitalize">{topic.name}</button>
+                  <div className="flex gap-0.5 flex-wrap">
+                    {email.topics.slice(0,2).map(({topic})=>(
+                      <button key={topic.id} onClick={()=>updateFilter("topic",topic.id)} className="text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-500 hover:text-gray-300 px-1 py-0 rounded capitalize leading-4">{topic.name}</button>
                     ))}
-                    {email.topics.length>3&&<span className="text-xs text-gray-500">+{email.topics.length-3}</span>}
+                    {email.topics.length>2&&<span className="text-[10px] text-gray-600">+{email.topics.length-2}</span>}
                   </div>
                 </td>
                 <td className="px-4 pt-3 pb-2.5 text-xs text-gray-500 whitespace-nowrap">
