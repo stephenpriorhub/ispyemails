@@ -263,11 +263,12 @@ enum LearningCategory {
 }
 
 model Learning {
-  id          String           @id @default(cuid())
-  content     String           @db.Text
-  source      LearningSource
-  category    LearningCategory @default(GENERAL)
-  status      LearningStatus   @default(PENDING)
+  id              String           @id @default(cuid())
+  content         String           @db.Text
+  source          LearningSource
+  category        LearningCategory @default(GENERAL)
+  status          LearningStatus   @default(PENDING)
+  isContradicted  Boolean          @default(false) // flags when this contradicts validated knowledge
   emailId     String?
   email       Email?           @relation(fields: [emailId], references: [id], onDelete: SetNull)
   guruId      String?

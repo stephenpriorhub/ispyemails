@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Mail, Users, TrendingUp, Inbox } from "lucide-react";
 import DashboardClient from "@/components/dashboard/DashboardClient";
 import LocalTime from "@/components/dashboard/LocalTime";
-import { Bot, User } from "lucide-react";
+import { Bot, UserCog } from "lucide-react";
 
 const placementColors: Record<string,string> = {
   PRIMARY:"text-green-400 bg-green-400/10",
@@ -224,7 +224,7 @@ export default async function DashboardPage({
                     <div key={l.id} className="flex items-start gap-1.5">
                       {l.source === "AI_EMAIL"
                         ? <Bot className="w-3 h-3 text-blue-400 flex-shrink-0 mt-0.5" />
-                        : <User className="w-3 h-3 text-amber-400 flex-shrink-0 mt-0.5" />}
+                        : <UserCog className="w-3 h-3 text-amber-400 flex-shrink-0 mt-0.5" />}
                       <p className="text-xs text-gray-300 leading-snug">{l.content}</p>
                     </div>
                   ))}

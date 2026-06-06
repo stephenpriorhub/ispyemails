@@ -1,10 +1,11 @@
 "use client";
 import { useState } from "react";
-import { Brain, CheckCircle, XCircle, Bot, User, ChevronDown, ChevronUp } from "lucide-react";
+import { Brain, CheckCircle, XCircle, Bot, UserCog, ChevronDown, ChevronUp, AlertTriangle, Copy, Check, Download } from "lucide-react";
 import Link from "next/link";
 
 interface Learning {
-  id: string; content: string; source: string; category: string; status: string; createdAt: string | Date;
+  id: string; content: string; source: string; category: string;
+  status: string; createdAt: string | Date; isContradicted: boolean;
   email?: { id: string; subject: string } | null;
   guru?: { id: string; name: string } | null;
   publisher?: { id: string; name: string } | null;
@@ -12,36 +13,65 @@ interface Learning {
 }
 
 const catColor: Record<string, string> = {
-  GURU: "text-purple-400", PUBLISHER: "text-amber-400", LIST: "text-blue-400", TOPIC: "text-green-400", GENERAL: "text-gray-400",
-};
-const catLabel: Record<string, string> = {
-  GURU: "Guru", PUBLISHER: "Publisher", LIST: "List", TOPIC: "Topic", GENERAL: "General",
+  GURU: "text-purple-400 bg-purple-400/10",
+  PUBLISHER: "text-amber-400 bg-amber-400/10",
+  LIST: "text-blue-400 bg-blue-400/10",
+  TOPIC: "text-green-400 bg-green-400/10",
+  GENERAL: "text-gray-400 bg-gray-700/50",
 };
 
-function LearningCard({ learning, onValidate, onIgnore }: { learning: Learning; onValidate?: () => void; onIgnore?: () => void }) {
-  const isAI = learning.source === "AI_EMAIL";
+function SourceBadge({ source }: { source: string }) {
+  if (source === "AI_EMAIL") {
+    return (
+      <div className="flex items-center gap-1 text-blue-400 flex-shrink-0" title="Detected by AI from email">
+        <Bot className="w-3.5 h-3.5" />
+        <span className="text-[10px] font-medium uppercase tracking-wide">AI</span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1 text-amber-400 flex-shrink-0" title="From your action">
+      <UserCog className="w-3.5 h-3.5" />
+      <span className="text-[10px] font-medium uppercase tracking-wide">You</span>
+    </div>
+  );
+}
+
+function LearningCard({ learning, onValidate, onIgnore }: {
+  learning: Learning;
+  onValidate?: () => void;
+  onIgnore?: () => void;
+}) {
   const entity = learning.guru?.name || learning.publisher?.name || learning.list?.name;
   return (
-    <div className="flex items-start gap-3 px-4 py-3 group">
-      <div className="flex-shrink-0 mt-0.5" title={isAI ? "Detected by AI from email" : "From user action"}>
-        {isAI ? <Bot className="w-4 h-4 text-blue-400" /> : <User className="w-4 h-4 text-amber-400" />}
-      </div>
+    <div className={`flex items-start gap-3 px-4 py-3 group ${learning.isContradicted ? "bg-amber-500/5" : ""}`}>
+      <SourceBadge source={learning.source} />
       <div className="flex-1 min-w-0">
+        <div className="flex items-start gap-2">
+          {learning.isContradicted && (
+            <div className="flex items-center gap-1 text-amber-400 flex-shrink-0 mt-0.5" title="May contradict existing validated knowledge">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span className="text-[10px] font-medium uppercase tracking-wide text-amber-400">Contradicts</span>
+            </div>
+          )}
+        </div>
         <p className="text-sm text-white leading-snug">{learning.content}</p>
         <div className="flex items-center gap-2 mt-1 flex-wrap">
-          <span className={`text-xs font-medium ${catColor[learning.category] ?? "text-gray-400"}`}>{catLabel[learning.category]}</span>
+          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${catColor[learning.category] ?? catColor.GENERAL}`}>
+            {learning.category}
+          </span>
           {entity && <span className="text-xs text-gray-600">· {entity}</span>}
-          {isAI && learning.email && (
+          {learning.source === "AI_EMAIL" && learning.email && (
             <Link href={`/emails/${learning.email.id}`} className="text-xs text-gray-600 hover:text-gray-400 truncate max-w-48">
-              · {learning.email.subject.substring(0, 50)}
+              · {learning.email.subject.substring(0, 45)}…
             </Link>
           )}
           <span className="text-xs text-gray-700">{new Date(learning.createdAt).toLocaleDateString()}</span>
         </div>
       </div>
       {onValidate && onIgnore && (
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-          <button onClick={onValidate} className="flex items-center gap-1 px-2 py-1 text-xs text-green-400 hover:bg-green-400/10 rounded transition-colors" title="Validate — add to brain">
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5">
+          <button onClick={onValidate} className="flex items-center gap-1 px-2 py-1 text-xs text-green-400 hover:bg-green-400/10 rounded transition-colors" title="Validate">
             <CheckCircle className="w-3.5 h-3.5" />
           </button>
           <button onClick={onIgnore} className="flex items-center gap-1 px-2 py-1 text-xs text-red-400 hover:bg-red-400/10 rounded transition-colors" title="Ignore">
@@ -53,10 +83,31 @@ function LearningCard({ learning, onValidate, onIgnore }: { learning: Learning; 
   );
 }
 
-export default function IntelligenceClient({ pending: initialPending, validated: initialValidated }: { pending: Learning[]; validated: Learning[] }) {
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+      className="flex items-center gap-1 px-2 py-1 text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-700 rounded transition-colors"
+    >
+      {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
+export default function IntelligenceClient({ pending: initialPending, validated: initialValidated }: {
+  pending: Learning[];
+  validated: Learning[];
+}) {
   const [pending, setPending] = useState(initialPending);
   const [validated, setValidated] = useState(initialValidated);
-  const [showValidated, setShowValidated] = useState(false);
+  const [tab, setTab] = useState<"pending" | "validated" | "export">("pending");
+  const [showValidated, setShowValidated] = useState(true);
+  const [exportBlocks, setExportBlocks] = useState<{ title: string; entity: string; markdown: string }[] | null>(null);
+  const [loadingExport, setLoadingExport] = useState(false);
+
+  const contradictions = pending.filter(l => l.isContradicted);
 
   async function validate(id: string) {
     await fetch(`/api/learnings/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "VALIDATED" }) });
@@ -70,64 +121,125 @@ export default function IntelligenceClient({ pending: initialPending, validated:
     setPending(p => p.filter(l => l.id !== id));
   }
 
+  async function validateAll() {
+    await Promise.all(pending.map(l => fetch(`/api/learnings/${l.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "VALIDATED" }) })));
+    setValidated(v => [...pending.map(l => ({ ...l, status: "VALIDATED" })), ...v]);
+    setPending([]);
+  }
+
+  async function loadExport() {
+    setLoadingExport(true);
+    const res = await fetch("/api/learnings/export");
+    const data = await res.json();
+    setExportBlocks(data.blocks);
+    setLoadingExport(false);
+  }
+
   return (
     <div className="p-6 max-w-3xl">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-white flex items-center gap-2">
           <Brain className="w-6 h-6 text-amber-400" />Intelligence
         </h1>
-        <p className="text-gray-400 text-sm mt-1">
-          What the AI is learning from emails and user actions.
-          <span className="ml-2 text-xs"><Bot className="w-3 h-3 inline mr-1 text-blue-400" />= from email &nbsp;<User className="w-3 h-3 inline mr-1 text-amber-400" />= from your actions</span>
+        <p className="text-gray-400 text-sm mt-1 flex items-center gap-4">
+          What iSpyFinpub is learning from competitor emails.
+          <span className="flex items-center gap-3 text-xs">
+            <span className="flex items-center gap-1 text-blue-400"><Bot className="w-3 h-3" />AI detected</span>
+            <span className="flex items-center gap-1 text-amber-400"><UserCog className="w-3 h-3" />Your action</span>
+            <span className="flex items-center gap-1 text-amber-400"><AlertTriangle className="w-3 h-3" />Contradicts validated</span>
+          </span>
         </p>
       </div>
 
-      {/* Pending — needs review */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-            Pending Review
-            {pending.length > 0 && <span className="px-1.5 py-0.5 text-xs bg-amber-500/10 text-amber-400 rounded-full">{pending.length}</span>}
-          </h2>
-          {pending.length > 0 && (
-            <button
-              onClick={async () => {
-                await Promise.all(pending.map(l => fetch(`/api/learnings/${l.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "VALIDATED" }) })));
-                setValidated(v => [...pending.map(l => ({ ...l, status: "VALIDATED" })), ...v]);
-                setPending([]);
-              }}
-              className="text-xs text-green-400 hover:text-green-300 px-2 py-1 rounded hover:bg-green-400/10 transition-colors"
-            >
-              Validate all
-            </button>
-          )}
-        </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-lg divide-y divide-gray-800">
-          {pending.map(l => (
-            <LearningCard key={l.id} learning={l} onValidate={() => validate(l.id)} onIgnore={() => ignore(l.id)} />
-          ))}
-          {pending.length === 0 && (
-            <p className="px-4 py-8 text-center text-gray-500 text-sm">No pending learnings. Run a sync to detect new insights from emails.</p>
-          )}
-        </div>
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 border-b border-gray-800">
+        {[
+          { key: "pending", label: `Pending Review${pending.length > 0 ? ` (${pending.length})` : ""}`, alert: contradictions.length > 0 },
+          { key: "validated", label: `Validated Knowledge (${validated.length})` },
+          { key: "export", label: "Export to Brain" },
+        ].map(t => (
+          <button
+            key={t.key}
+            onClick={() => { setTab(t.key as typeof tab); if (t.key === "export" && !exportBlocks) loadExport(); }}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
+              tab === t.key ? "border-amber-400 text-white" : "border-transparent text-gray-500 hover:text-gray-300"
+            }`}
+          >
+            {t.label}
+            {t.alert && <span className="w-1.5 h-1.5 bg-amber-400 rounded-full" />}
+          </button>
+        ))}
       </div>
 
-      {/* Validated knowledge base */}
-      <div>
-        <button
-          onClick={() => setShowValidated(!showValidated)}
-          className="flex items-center gap-2 text-sm font-semibold text-gray-400 hover:text-white mb-3 transition-colors"
-        >
-          {showValidated ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          Validated — Fed Into AI Brain ({validated.length})
-        </button>
-        {showValidated && (
+      {/* Pending tab */}
+      {tab === "pending" && (
+        <div>
+          {contradictions.length > 0 && (
+            <div className="mb-4 flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 px-4 py-2 rounded-lg">
+              <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+              <p className="text-xs text-amber-300">
+                <strong>{contradictions.length}</strong> pending {contradictions.length === 1 ? "item" : "items"} may contradict existing validated knowledge. Review carefully before validating.
+              </p>
+            </div>
+          )}
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm text-gray-400">{pending.length} items awaiting review</span>
+            {pending.length > 0 && (
+              <button onClick={validateAll} className="text-xs text-green-400 hover:text-green-300 px-2 py-1 rounded hover:bg-green-400/10 transition-colors">
+                Validate all
+              </button>
+            )}
+          </div>
+          <div className="bg-gray-900 border border-gray-800 rounded-lg divide-y divide-gray-800">
+            {pending.map(l => (
+              <LearningCard key={l.id} learning={l} onValidate={() => validate(l.id)} onIgnore={() => ignore(l.id)} />
+            ))}
+            {pending.length === 0 && (
+              <p className="px-4 py-8 text-center text-gray-500 text-sm">No pending intelligence. Run a sync or use Settings → Extract Intelligence to find new insights.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Validated Knowledge tab */}
+      {tab === "validated" && (
+        <div>
+          <p className="text-xs text-gray-500 mb-4">
+            These facts are confirmed and fed into the AI on every email analysis. The more you validate, the smarter the system gets.
+          </p>
           <div className="bg-gray-900 border border-gray-800 rounded-lg divide-y divide-gray-800">
             {validated.map(l => <LearningCard key={l.id} learning={l} />)}
-            {validated.length === 0 && <p className="px-4 py-6 text-center text-gray-500 text-sm">No validated learnings yet.</p>}
+            {validated.length === 0 && (
+              <p className="px-4 py-6 text-center text-gray-500 text-sm">No validated knowledge yet. Validate pending items to build the knowledge base.</p>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Export to Brain tab */}
+      {tab === "export" && (
+        <div>
+          <p className="text-xs text-gray-500 mb-4">
+            Validated intelligence formatted for the brain vault. Copy each block and append to the relevant markdown file in Obsidian.
+          </p>
+          {loadingExport && <p className="text-sm text-gray-500 py-8 text-center">Grouping validated learnings…</p>}
+          {exportBlocks && exportBlocks.length === 0 && (
+            <p className="text-sm text-gray-500 py-8 text-center">No validated learnings to export yet.</p>
+          )}
+          {exportBlocks && exportBlocks.map((block, i) => (
+            <div key={i} className="mb-4 bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-800/50">
+                <span className="text-xs font-medium text-white">{block.title}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">Append to <code className="text-amber-400">{block.entity}.md</code></span>
+                  <CopyButton text={block.markdown} />
+                </div>
+              </div>
+              <pre className="p-4 text-xs text-gray-300 whitespace-pre-wrap font-mono overflow-x-auto">{block.markdown}</pre>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
