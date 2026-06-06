@@ -155,28 +155,28 @@ export default function EmailList({ emails,total,page,pages,publishers,topics,li
           </thead>
           <tbody className="divide-y divide-gray-800/50">
             {emails.map(email=>(
-              <tr key={email.id} className="hover:bg-gray-800/30 transition-colors">
-                <td className="px-4 py-2.5">
+              <tr key={email.id} className="hover:bg-gray-800/30 transition-colors align-top">
+                <td className="px-4 pt-3 pb-2.5">
                   <span className={`inline-flex items-center px-1.5 py-0.5 rounded border text-xs font-medium ${pBadge[email.inboxPlacement]??pBadge.UNKNOWN}`}>{email.inboxPlacement}</span>
                 </td>
-                <td className="px-4 py-2.5">
+                <td className="px-4 pt-3 pb-2.5 max-w-0 w-full">
                   {email.publisher && (
                     <button onClick={()=>updateFilter("publisher",email.publisher!.id)} className="inline-flex mb-1 px-1.5 py-0.5 text-xs bg-gray-800 text-gray-500 hover:text-amber-400 rounded border border-gray-700/50 hover:border-amber-500/30 transition-colors leading-none">{email.publisher.name}</button>
                   )}
-                  <Link href={`/emails/${email.id}`} className="text-white hover:text-amber-400 transition-colors line-clamp-1 block">{email.subject}</Link>
+                  <Link href={`/emails/${email.id}`} className="text-white hover:text-amber-400 transition-colors truncate block max-w-full">{email.subject}</Link>
                   <p className="text-xs text-gray-500 mt-0.5 truncate">{email.fromName?`${email.fromName} <${email.fromEmail}>`:email.fromEmail}</p>
                 </td>
-                <td className="px-4 py-2.5">
+                <td className="px-4 pt-3 pb-2.5">
                   {email.list ? (
-                    <button onClick={()=>updateFilter("list",email.list!.id)} className="text-xs text-gray-400 hover:text-amber-400 hover:underline">{email.list.name}</button>
+                    <button onClick={()=>updateFilter("list",email.list!.id)} className="text-xs text-gray-400 hover:text-amber-400 hover:underline text-left">{email.list.name}</button>
                   ) : (
                     <span className="text-xs text-gray-600">—</span>
                   )}
                 </td>
-                <td className="px-4 py-2.5">
+                <td className="px-4 pt-3 pb-2.5">
                   <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs ${tBadge[email.emailType]??tBadge.UNKNOWN}`}>{email.emailType.replace("_"," ")}</span>
                 </td>
-                <td className="px-4 py-2.5">
+                <td className="px-4 pt-3 pb-2.5">
                   <div className="flex gap-1 flex-wrap">
                     {email.topics.slice(0,3).map(({topic})=>(
                       <button key={topic.id} onClick={()=>updateFilter("topic",topic.id)} className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-1.5 py-0.5 rounded capitalize">{topic.name}</button>
@@ -184,7 +184,7 @@ export default function EmailList({ emails,total,page,pages,publishers,topics,li
                     {email.topics.length>3&&<span className="text-xs text-gray-500">+{email.topics.length-3}</span>}
                   </div>
                 </td>
-                <td className="px-4 py-2.5 text-xs text-gray-500">
+                <td className="px-4 pt-3 pb-2.5 text-xs text-gray-500 whitespace-nowrap">
                   {new Date(email.receivedAt).toLocaleDateString("en-US",{month:"short",day:"numeric"})}
                   <br/>{new Date(email.receivedAt).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}
                 </td>
