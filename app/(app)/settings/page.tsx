@@ -1,11 +1,10 @@
 export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
-import { requireUser, isAdminRole } from "@/lib/auth";
+import { getServerIsAdmin } from "@/lib/server-role";
 import SettingsClient from "@/components/SettingsClient";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ connected?: string; error?: string }> }) {
-  const user = await requireUser();
-  const isAdmin = isAdminRole(user.role);
+  const isAdmin = await getServerIsAdmin();
   const sp = await searchParams;
   return (
     <SettingsClient

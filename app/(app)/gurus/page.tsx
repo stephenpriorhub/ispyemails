@@ -1,11 +1,14 @@
 export const dynamic = "force-dynamic";
+// isAdmin: client-side auth handles role gating via AppShell/Sidebar
 import { prisma } from "@/lib/prisma";
-import { requireUser, isAdminRole } from "@/lib/auth";
+import { getServerIsAdmin } from "@/lib/server-role";
+
 import GurusManager from "@/components/gurus/GurusManager";
 
 export default async function GurusPage() {
-  const user = await requireUser();
-  const isAdmin = isAdminRole(user.role);
+  const isAdmin = await getServerIsAdmin();
+
+
   const [gurus, lists, publishers] = await Promise.all([
     prisma.guru.findMany({
       include: {

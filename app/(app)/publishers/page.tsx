@@ -1,11 +1,14 @@
 export const dynamic = "force-dynamic";
+// isAdmin: client-side auth handles role gating via AppShell/Sidebar
 import { prisma } from "@/lib/prisma";
-import { requireUser, isAdminRole } from "@/lib/auth";
+import { getServerIsAdmin } from "@/lib/server-role";
+
 import PublishersClient from "@/components/publishers/PublishersClient";
 
 export default async function PublishersPage() {
-  const user = await requireUser();
-  const isAdmin = isAdminRole(user.role);
+  const isAdmin = await getServerIsAdmin();
+
+
   const staleThreshold = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000);
 
   const publishers = await prisma.publisher.findMany({
