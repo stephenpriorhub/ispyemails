@@ -146,10 +146,10 @@ export default function EmailList({ emails,total,page,pages,publishers,topics,li
           <thead className="sticky top-0 bg-gray-900 border-b border-gray-800">
             <tr>
               <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium w-28">Placement</th>
-              <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium">Subject</th>
+              <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium w-[38%]">Subject</th>
               <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium w-36">List</th>
-              <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium w-24">Type</th>
-              <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium w-44">Topics</th>
+              <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium w-20">Type</th>
+              <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium">Topics</th>
               <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium w-24">Date</th>
             </tr>
           </thead>
@@ -159,11 +159,11 @@ export default function EmailList({ emails,total,page,pages,publishers,topics,li
                 <td className="px-4 pt-3 pb-2.5">
                   <span className={`inline-flex items-center px-1.5 py-0.5 rounded border text-xs font-medium ${pBadge[email.inboxPlacement]??pBadge.UNKNOWN}`}>{email.inboxPlacement}</span>
                 </td>
-                <td className="px-4 pt-3 pb-2.5 max-w-0 w-full">
+                <td className="px-4 pt-3 pb-2.5">
                   {email.publisher && (
                     <button onClick={()=>updateFilter("publisher",email.publisher!.id)} className="inline-flex mb-1 px-1.5 py-0.5 text-xs bg-gray-800 text-gray-500 hover:text-amber-400 rounded border border-gray-700/50 hover:border-amber-500/30 transition-colors leading-none">{email.publisher.name}</button>
                   )}
-                  <Link href={`/emails/${email.id}`} className="text-white hover:text-amber-400 transition-colors truncate block max-w-full">{email.subject}</Link>
+                  <Link href={`/emails/${email.id}`} className="text-white hover:text-amber-400 transition-colors line-clamp-2 block leading-snug">{email.subject}</Link>
                   <p className="text-xs text-gray-500 mt-0.5 truncate">{email.fromName?`${email.fromName} <${email.fromEmail}>`:email.fromEmail}</p>
                 </td>
                 <td className="px-4 pt-3 pb-2.5">
@@ -177,12 +177,15 @@ export default function EmailList({ emails,total,page,pages,publishers,topics,li
                   <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs ${tBadge[email.emailType]??tBadge.UNKNOWN}`}>{email.emailType.replace("_"," ")}</span>
                 </td>
                 <td className="px-4 pt-3 pb-2.5">
-                  <div className="flex gap-0.5 flex-wrap">
-                    {email.topics.slice(0,2).map(({topic})=>(
-                      <button key={topic.id} onClick={()=>updateFilter("topic",topic.id)} className="text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-500 hover:text-gray-300 px-1 py-0 rounded capitalize leading-4">{topic.name}</button>
+                  <p className="text-xs text-gray-500 leading-relaxed capitalize">
+                    {email.topics.map(({topic}, i) => (
+                      <span key={topic.id}>
+                        <button onClick={()=>updateFilter("topic",topic.id)} className="hover:text-gray-300 transition-colors">{topic.name}</button>
+                        {i < email.topics.length - 1 && <span className="text-gray-700">, </span>}
+                      </span>
                     ))}
-                    {email.topics.length>2&&<span className="text-[10px] text-gray-600">+{email.topics.length-2}</span>}
-                  </div>
+                    {email.topics.length === 0 && <span className="text-gray-700">—</span>}
+                  </p>
                 </td>
                 <td className="px-4 pt-3 pb-2.5 text-xs text-gray-500 whitespace-nowrap">
                   {new Date(email.receivedAt).toLocaleDateString("en-US",{month:"short",day:"numeric"})}
