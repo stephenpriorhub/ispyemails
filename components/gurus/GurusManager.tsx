@@ -182,7 +182,7 @@ export default function GurusManager({ gurus: initial, lists, publishers, isAdmi
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-medium text-white">{guru.name}</span>
                   {guru.publisher && <span className="text-xs text-gray-500">· {guru.publisher.name}</span>}
-                  <a href={`/emails?guru=${guru.id}`} onClick={e=>e.stopPropagation()} className="text-gray-600 hover:text-amber-400 text-sm" title="View emails">→</a>
+                  <a href={`/emails?guru=${guru.id}`} onClick={e=>e.stopPropagation()} className="px-2 py-0.5 text-xs bg-gray-800 hover:bg-amber-500/10 text-gray-400 hover:text-amber-400 rounded border border-gray-700 hover:border-amber-500/30 transition-colors">View emails →</a>
                   <span className="text-xs text-gray-600">{guru._count.emails} emails</span>
                 </div>
                 {!isExpanded && activeLists.length > 0 && (

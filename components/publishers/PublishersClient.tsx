@@ -150,7 +150,7 @@ export default function PublishersClient({ publishers: initial, weekMap, isAdmin
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-white">{pub.name}</span>
                     {pub.isStale && pub.lastEmail && <StaleIcon lastEmail={pub.lastEmail} />}
-                    <Link href={`/emails?publisher=${pub.id}`} className="text-gray-600 hover:text-amber-400 transition-colors" title="View emails">→</Link>
+                    <Link href={`/emails?publisher=${pub.id}`} className="ml-1 px-2 py-0.5 text-xs bg-gray-800 hover:bg-amber-500/10 text-gray-400 hover:text-amber-400 rounded border border-gray-700 hover:border-amber-500/30 transition-colors">View emails →</Link>
                     <span className={`text-xs px-1.5 py-0.5 rounded ${typeColor[pub.type] ?? typeColor.COMPETITOR}`}>{typeLabel(pub.type)}</span>
                     {!pub.isConfirmed && (
                       <span className="text-xs bg-yellow-500/10 text-yellow-400 px-1.5 py-0.5 rounded">AI guess</span>

@@ -23,7 +23,7 @@ interface ListItem {
   lastEmail?: Date | string | null;
 }
 
-export default function ListsManager({ lists: initial, publishers, isAdmin = false }: { lists: ListItem[]; publishers: Publisher[]; isAdmin?: boolean }) {
+export default function ListsManager({ lists: initial, publishers, primaryGurus = [], isAdmin = false }: { lists: ListItem[]; publishers: Publisher[]; primaryGurus?: { id: string; name: string }[]; isAdmin?: boolean }) {
   const [lists, setLists] = useState(initial);
   const [editing, setEditing] = useState<string | null>(null);
   const [merging, setMerging] = useState<string | null>(null);
@@ -34,6 +34,7 @@ export default function ListsManager({ lists: initial, publishers, isAdmin = fal
   const [loading, setLoading] = useState<string | null>(null);
   const [filterPublisher, setFilterPublisher] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
+  const [filterGuru, setFilterGuru] = useState("all");
 
   async function addList(e: React.FormEvent) {
     e.preventDefault();
@@ -81,7 +82,8 @@ export default function ListsManager({ lists: initial, publishers, isAdmin = fal
   const active = lists.filter(l => !l.isIgnored);
   const filtered = active
     .filter(l => filterPublisher === "all" || l.publisher?.id === filterPublisher)
-    .filter(l => filterCategory === "all" || l.category === filterCategory);
+    .filter(l => filterCategory === "all" || l.category === filterCategory)
+    .filter(l => filterGuru === "all" || l.gurus.some(g => !g.guru.isIgnored && g.guru.id === filterGuru));
   const ignored = lists.filter(l => l.isIgnored);
 
   return (
@@ -108,6 +110,12 @@ export default function ListsManager({ lists: initial, publishers, isAdmin = fal
           <option value="all">All categories</option>
           {CATEGORIES.map(c => <option key={c} value={c}>{catLabel(c)}</option>)}
         </select>
+        {primaryGurus.length > 0 && (
+          <select value={filterGuru} onChange={e => setFilterGuru(e.target.value)} className="py-1 px-2 bg-gray-800 border border-gray-700 rounded text-sm text-gray-300 focus:outline-none focus:border-amber-500">
+            <option value="all">All editors</option>
+            {primaryGurus.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+        )}
         <span className="text-xs text-gray-600">{filtered.length} lists</span>
       </div>
 
@@ -139,7 +147,7 @@ export default function ListsManager({ lists: initial, publishers, isAdmin = fal
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-white">{list.name}</span>
                     {list.isStale && list.lastEmail && <StaleIcon lastEmail={list.lastEmail} />}
-                    <a href={`/emails?list=${list.id}`} className="text-gray-600 hover:text-amber-400 transition-colors text-sm" title="View emails">→</a>
+                    <a href={`/emails?list=${list.id}`} className="ml-1 px-2 py-0.5 text-xs bg-gray-800 hover:bg-amber-500/10 text-gray-400 hover:text-amber-400 rounded border border-gray-700 hover:border-amber-500/30 transition-colors">View emails →</a>
                     <span className={`text-xs px-1.5 py-0.5 rounded ${catColor[list.category] ?? ""}`}>{catLabel(list.category)}</span>
                     {list.publisher && <span className="text-xs text-gray-500">↳ {list.publisher.name}</span>}
                   </div>
