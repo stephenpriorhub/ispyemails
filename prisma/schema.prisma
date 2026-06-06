@@ -6,6 +6,8 @@ datasource db {
   provider = "postgresql"
 }
 
+// ─── Auth (managed by OxfordHub) ─────────────────────────────────────────────
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -16,7 +18,6 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
-
 enum Role {
   ADMIN
   USER
@@ -26,6 +27,8 @@ enum Status {
   ACTIVE
   SUSPENDED
 }
+
+// ─── Gmail ────────────────────────────────────────────────────────────────────
 
 model GmailAccount {
   id           String    @id @default(cuid())
@@ -40,19 +43,78 @@ model GmailAccount {
   updatedAt    DateTime  @updatedAt
 }
 
+// ─── Publishers ───────────────────────────────────────────────────────────────
+
+enum PublisherType {
+  INTERNAL          // your own company
+  COMPETITOR        // direct competitor
+  AFFILIATE_MARKETER // third-party affiliate
+}
+
 model Publisher {
-  id                 String   @id @default(cuid())
-  name               String   @unique
+  id                 String        @id @default(cuid())
+  name               String        @unique
+  type               PublisherType @default(COMPETITOR)
   domains            String[]
   knownFromAddresses String[]
-  logoUrl            String?
   website            String?
   notes              String?
-  isConfirmed        Boolean  @default(false)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  emails             Email[]
+  isConfirmed        Boolean       @default(false)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  lists  List[]
+  emails Email[]
 }
+
+// ─── Lists (newsletters) ──────────────────────────────────────────────────────
+
+enum ListCategory {
+  FREE_EDITORIAL
+  PAID_EDITORIAL
+  HOTLIST
+  MARKETING_FILE
+}
+
+model List {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  category    ListCategory @default(FREE_EDITORIAL)
+  publisherId String?
+  publisher   Publisher?   @relation(fields: [publisherId], references: [id])
+  notes       String?
+  isIgnored   Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  gurus  GuruList[]
+  emails Email[]
+}
+
+// ─── Gurus (editors/voices) ───────────────────────────────────────────────────
+
+model Guru {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  bio       String?    @db.Text
+  notes     String?
+  isIgnored Boolean    @default(false)
+  createdAt DateTime   @default(now())
+
+  lists  GuruList[]
+  emails EmailGuru[]
+}
+
+model GuruList {
+  guruId    String
+  listId    String
+  isPrimary Boolean @default(false)
+  guru      Guru    @relation(fields: [guruId], references: [id], onDelete: Cascade)
+  list      List    @relation(fields: [listId], references: [id], onDelete: Cascade)
+  @@id([guruId, listId])
+}
+
+// ─── Emails ───────────────────────────────────────────────────────────────────
 
 model Email {
   id                 String     @id @default(cuid())
@@ -69,6 +131,9 @@ model Email {
   publisherId        String?
   publisher          Publisher? @relation(fields: [publisherId], references: [id])
   publisherConfirmed Boolean    @default(false)
+  listId             String?
+  list               List?      @relation(fields: [listId], references: [id])
+  listConfirmed      Boolean    @default(false)
   emailType          EmailType  @default(UNKNOWN)
   emailTypeConfirmed Boolean    @default(false)
   aiSummary          String?    @db.Text
@@ -77,15 +142,26 @@ model Email {
   isProcessed        Boolean    @default(false)
   syncedAt           DateTime   @default(now())
   createdAt          DateTime   @default(now())
-  topics             EmailTopic[]
-  tags               EmailTag[]
-  offer              Offer?
+
+  topics EmailTopic[]
+  tags   EmailTag[]
+  gurus  EmailGuru[]
+  offer  Offer?
 
   @@index([receivedAt])
   @@index([fromEmail])
   @@index([publisherId])
+  @@index([listId])
   @@index([inboxPlacement])
   @@index([emailType])
+}
+
+model EmailGuru {
+  emailId String
+  guruId  String
+  email   Email  @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  guru    Guru   @relation(fields: [guruId], references: [id], onDelete: Cascade)
+  @@id([emailId, guruId])
 }
 
 enum Placement {
@@ -104,12 +180,14 @@ enum EmailType {
   UNKNOWN
 }
 
+// ─── Topics ───────────────────────────────────────────────────────────────────
+
 model Topic {
   id        String       @id @default(cuid())
   name      String       @unique
   isIgnored Boolean      @default(false)
   color     String?
-  synonyms  String[]     // merged/alias names — AI uses these to avoid creating duplicates
+  synonyms  String[]
   createdAt DateTime     @default(now())
   emails    EmailTopic[]
 }
@@ -122,6 +200,8 @@ model EmailTopic {
   topic      Topic  @relation(fields: [topicId], references: [id], onDelete: Cascade)
   @@id([emailId, topicId])
 }
+
+// ─── Tags ─────────────────────────────────────────────────────────────────────
 
 model Tag {
   id        String     @id @default(cuid())
@@ -138,6 +218,8 @@ model EmailTag {
   tag     Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
   @@id([emailId, tagId])
 }
+
+// ─── Offers ───────────────────────────────────────────────────────────────────
 
 model Offer {
   id      String  @id @default(cuid())

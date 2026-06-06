@@ -4,14 +4,15 @@ import { useState } from "react";
 import Link from "next/link";
 import { Users, Mail, TrendingUp, Pencil, Trash2, GitMerge, Check, X, Plus } from "lucide-react";
 
+const PUB_TYPES = ["INTERNAL", "COMPETITOR", "AFFILIATE_MARKETER"] as const;
+const typeLabel = (t: string) => t === "AFFILIATE_MARKETER" ? "Affiliate" : t === "INTERNAL" ? "Internal" : "Competitor";
+const typeColor: Record<string, string> = { INTERNAL: "bg-green-500/10 text-green-400", COMPETITOR: "bg-amber-500/10 text-amber-400", AFFILIATE_MARKETER: "bg-red-500/10 text-red-400" };
+
 interface Publisher {
-  id: string;
-  name: string;
-  domains: string[];
-  knownFromAddresses: string[];
-  website: string | null;
-  notes: string | null;
-  isConfirmed: boolean;
+  id: string; name: string; type: string;
+  domains: string[]; knownFromAddresses: string[];
+  website: string | null; notes: string | null; isConfirmed: boolean;
+  lists: { id: string; name: string }[];
   _count: { emails: number };
 }
 
@@ -24,7 +25,7 @@ export default function PublishersClient({ publishers: initial, weekMap }: Props
   const [publishers, setPublishers] = useState(initial);
   const [editing, setEditing] = useState<string | null>(null);
   const [merging, setMerging] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", domains: "", website: "", notes: "" });
+  const [editForm, setEditForm] = useState({ name: "", domains: "", website: "", notes: "", type: "COMPETITOR" });
   const [mergeTargetId, setMergeTargetId] = useState("");
   const [saving, setSaving] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -32,7 +33,7 @@ export default function PublishersClient({ publishers: initial, weekMap }: Props
 
   function startEdit(pub: Publisher) {
     setEditing(pub.id);
-    setEditForm({ name: pub.name, domains: pub.domains.join(", "), website: pub.website ?? "", notes: pub.notes ?? "" });
+    setEditForm({ name: pub.name, domains: pub.domains.join(", "), website: pub.website ?? "", notes: pub.notes ?? "", type: pub.type ?? "COMPETITOR" });
   }
 
   async function saveEdit(id: string) {
@@ -42,6 +43,7 @@ export default function PublishersClient({ publishers: initial, weekMap }: Props
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: editForm.name.trim(),
+        type: editForm.type,
         domains: editForm.domains.split(",").map((d) => d.trim()).filter(Boolean),
         website: editForm.website.trim() || null,
         notes: editForm.notes.trim() || null,
@@ -143,6 +145,7 @@ export default function PublishersClient({ publishers: initial, weekMap }: Props
                     <Link href={`/publishers/${pub.id}`} className="font-medium text-white hover:text-amber-400 transition-colors">
                       {pub.name}
                     </Link>
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${typeColor[pub.type] ?? typeColor.COMPETITOR}`}>{typeLabel(pub.type)}</span>
                     {!pub.isConfirmed && (
                       <span className="text-xs bg-yellow-500/10 text-yellow-400 px-1.5 py-0.5 rounded">AI guess</span>
                     )}
@@ -185,6 +188,12 @@ export default function PublishersClient({ publishers: initial, weekMap }: Props
                   <div>
                     <label className="text-xs text-gray-400 mb-1 block">Website</label>
                     <input value={editForm.website} onChange={(e) => setEditForm({ ...editForm, website: e.target.value })} className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:border-amber-500" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">Type</label>
+                    <select value={editForm.type} onChange={e => setEditForm({ ...editForm, type: e.target.value })} className="w-full px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-gray-300 focus:outline-none focus:border-amber-500">
+                      {PUB_TYPES.map(t => <option key={t} value={t}>{typeLabel(t)}</option>)}
+                    </select>
                   </div>
                   <div>
                     <label className="text-xs text-gray-400 mb-1 block">Notes</label>
@@ -240,3 +249,4 @@ export default function PublishersClient({ publishers: initial, weekMap }: Props
     </div>
   );
 }
+// Note: type field added via direct edit below

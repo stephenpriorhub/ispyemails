@@ -65,7 +65,7 @@ export async function register() {
     console.error("[iSpyEmails] Migration error:", err);
   }
 
-  const INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+  const INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 hours
   const BASE_URL = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 
   async function runSync() {

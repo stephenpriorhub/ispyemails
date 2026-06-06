@@ -3,6 +3,9 @@ import { prisma } from "./prisma";
 interface AnalysisResult {
   publisher: string | null;
   publisherConfidence: number;
+  list: string | null;          // newsletter name (masthead)
+  listConfidence: number;
+  gurus: string[];              // editor/author names detected
   emailType: "LIFT_NOTE" | "EDITORIAL" | "PROMO" | "WELCOME" | "UNKNOWN";
   topics: string[];
   offer: { url: string | null; promise: string | null; ticker: string | null };
@@ -17,72 +20,65 @@ export async function analyzeEmail(
   bodyText: string | null,
   bodyHtml: string | null
 ): Promise<void> {
-  // Lazy-load Anthropic so env vars are definitely available
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  const [publishers, existingTopics, ignoredTopics] = await Promise.all([
-    prisma.publisher.findMany({ select: { id: true, name: true, domains: true, knownFromAddresses: true } }),
+  const [publishers, lists, gurus, existingTopics, ignoredTopics, ignoredGurus] = await Promise.all([
+    prisma.publisher.findMany({ select: { id: true, name: true, domains: true, knownFromAddresses: true, type: true } }),
+    prisma.list.findMany({ where: { isIgnored: false }, select: { id: true, name: true, publisherId: true } }),
+    prisma.guru.findMany({ where: { isIgnored: false }, select: { id: true, name: true } }),
     prisma.topic.findMany({ where: { isIgnored: false }, select: { name: true, synonyms: true } }),
     prisma.topic.findMany({ where: { isIgnored: true }, select: { name: true, synonyms: true } }),
+    prisma.guru.findMany({ where: { isIgnored: true }, select: { name: true } }),
   ]);
 
-  // Use plain text body, strip excessive whitespace, cap at 4000 chars
   const rawBody = bodyText ?? (bodyHtml ? bodyHtml.replace(/<[^>]+>/g, " ") : "");
   const cleanBody = rawBody.replace(/\s+/g, " ").replace(/&#\d+;/g, " ").trim().substring(0, 4000);
 
-  const ignoredNames = new Set([
-    ...ignoredTopics.flatMap((t) => [t.name.toLowerCase(), ...t.synonyms.map((s) => s.toLowerCase())]),
+  const ignoredTopicNames = new Set([
+    ...ignoredTopics.flatMap(t => [t.name.toLowerCase(), ...t.synonyms.map(s => s.toLowerCase())]),
   ]);
+  const ignoredGuruNames = new Set(ignoredGurus.map(g => g.name.toLowerCase()));
 
-  // Show canonical name + synonyms so AI reuses the right name
-  const existingTopicNames = existingTopics
-    .map((t) => t.synonyms.length > 0 ? `${t.name} (also: ${t.synonyms.join(", ")})` : t.name)
+  const topicList = existingTopics
+    .map(t => t.synonyms.length > 0 ? `${t.name} (also: ${t.synonyms.join(", ")})` : t.name)
     .join(", ");
 
   const prompt = `You are an expert analyst of financial newsletter emails in the direct-response publishing industry.
-
-Analyze this email and return ONLY a valid JSON object — no markdown, no explanation.
+Analyze this email and return ONLY valid JSON — no markdown, no explanation.
 
 FROM: ${fromName || fromEmail} <${fromEmail}>
 SUBJECT: ${subject}
 BODY: ${cleanBody}
 
-KNOWN PUBLISHERS (match by name or domain):
-${publishers.map((p) => `- ${p.name} (${p.domains.join(", ")})`).join("\n") || "None yet"}
+KNOWN PUBLISHERS: ${publishers.map(p => `${p.name} (${p.domains.join(", ")}) [${p.type}]`).join(" | ") || "None"}
+KNOWN NEWSLETTERS/LISTS: ${lists.map(l => l.name).join(", ") || "None"}
+KNOWN EDITORS/GURUS: ${gurus.map(g => g.name).join(", ") || "None"}
+EXISTING TOPICS (reuse): ${topicList || "None"}
+IGNORED TOPICS (never use): ${[...ignoredTopicNames].join(", ") || "None"}
+IGNORED GURUS (never use): ${[...ignoredGuruNames].join(", ") || "None"}
 
-EXISTING TOPICS (prefer reusing these over creating new ones):
-${existingTopicNames || "None yet"}
-
-IGNORED TOPICS (never use these):
-${[...ignoredNames].join(", ") || "None"}
-
-Return this exact JSON structure:
+Return ONLY this JSON:
 {
-  "publisher": "Exact publisher name from list above, or null if genuinely unknown",
+  "publisher": "Publisher name from list or null",
   "publisherConfidence": 0.0,
-  "emailType": "LIFT_NOTE or EDITORIAL or PROMO or WELCOME or UNKNOWN",
+  "list": "Newsletter/list name (check masthead/header) or null",
+  "listConfidence": 0.0,
+  "gurus": ["Editor or author names found in the email"],
+  "emailType": "LIFT_NOTE|EDITORIAL|PROMO|WELCOME|UNKNOWN",
   "topics": ["topic1", "topic2"],
-  "offer": {
-    "url": "https://... or null",
-    "promise": "The core hook/promise to reader or null",
-    "ticker": "TICKER or null"
-  },
-  "summary": "2-3 sentence plain English summary of what this email is about and what action it wants the reader to take."
+  "offer": { "url": "https://... or null", "promise": "pitch or null", "ticker": "TICK or null" },
+  "summary": "2-3 sentence summary of what this email is about."
 }
 
 DEFINITIONS:
-- LIFT_NOTE: A short email promoting ANOTHER publisher's newsletter or product (affiliate/partner promotion). Key signals: "my friend", "I wanted to share", "fellow investor", promotes someone else's work.
-- EDITORIAL: Investment analysis, market commentary, stock picks, educational content from the publisher themselves. The meat of a newsletter.
-- PROMO: Direct sales email for the publisher's OWN paid product/service/subscription.
-- WELCOME: Onboarding, confirmation, "you're signed up" emails. No investment content yet.
-- UNKNOWN: Cannot determine type.
-
-TOPIC RULES:
-- Max 4 topics. Be specific but not overly granular.
-- Good examples: "options trading", "gold", "AI stocks", "SpaceX IPO", "macro", "biotech", "crypto", "small caps"
-- Reuse existing topics when they fit. Only create new ones if genuinely needed.
-- Never use ignored topics.`;
+- list: The NEWSLETTER NAME shown in the masthead/header (e.g. "Daily Reckoning", "Stansberry Digest"). Distinct from the publisher company.
+- gurus: Names of editors, authors, or analysts who wrote or are featured. Look for "Editor" bylines, "From the desk of", signatures.
+- LIFT_NOTE: Promotes ANOTHER publisher's product (affiliate). Key: "my friend", "fellow investor", promotes someone else.
+- EDITORIAL: Investment analysis, market commentary, stock picks from the publisher themselves.
+- PROMO: Direct sales for their OWN paid subscription.
+- WELCOME: Onboarding/confirmation email.
+- topics: Max 4. Be specific. Reuse existing topics when they fit.`;
 
   try {
     const message = await client.messages.create({
@@ -93,115 +89,111 @@ TOPIC RULES:
 
     const content = message.content[0];
     if (content.type !== "text") throw new Error("Unexpected response type");
-
-    // Extract JSON (handle if wrapped in markdown code block)
     const jsonMatch = content.text.replace(/```json\n?/g, "").replace(/```\n?/g, "").match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error(`No JSON in response: ${content.text.substring(0, 200)}`);
-
+    if (!jsonMatch) throw new Error(`No JSON in response`);
     const result: AnalysisResult = JSON.parse(jsonMatch[0]);
 
-    // Match publisher — check known from-addresses first, then domains
+    // ── Publisher matching ──
     const emailDomain = (fromEmail.toLowerCase().split("@")[1] ?? "");
     let publisherId: string | null = null;
 
-    // First: exact from-address match
-    const exactMatch = publishers.find((p) => p.knownFromAddresses.includes(fromEmail));
+    const exactMatch = publishers.find(p => p.knownFromAddresses.includes(fromEmail));
     if (exactMatch) {
       publisherId = exactMatch.id;
     } else {
-      // Second: domain match (including subdomains)
-      const domainMatch = publishers.find((p) =>
-        p.domains.some((d) => {
-          const pd = d.toLowerCase();
-          return emailDomain === pd || emailDomain.endsWith("." + pd);
-        })
+      const domainMatch = publishers.find(p =>
+        p.domains.some(d => { const pd = d.toLowerCase(); return emailDomain === pd || emailDomain.endsWith("." + pd); })
       );
       if (domainMatch) {
         publisherId = domainMatch.id;
-        // Learn this address
         if (!domainMatch.knownFromAddresses.includes(fromEmail)) {
-          await prisma.publisher.update({
-            where: { id: domainMatch.id },
-            data: { knownFromAddresses: { push: fromEmail } },
-          });
+          await prisma.publisher.update({ where: { id: domainMatch.id }, data: { knownFromAddresses: { push: fromEmail } } });
         }
       } else if (result.publisher && result.publisherConfidence >= 0.75) {
-        // Third: AI named a publisher confidently — create it
-        const domain = emailDomain || "";
         const newPub = await prisma.publisher.create({
-          data: {
-            name: result.publisher,
-            domains: domain ? [domain] : [],
-            knownFromAddresses: [fromEmail],
-            isConfirmed: false,
-          },
+          data: { name: result.publisher, domains: emailDomain ? [emailDomain] : [], knownFromAddresses: [fromEmail], isConfirmed: false },
         });
         publisherId = newPub.id;
       }
     }
 
-    // Map WELCOME → store as UNKNOWN in DB (schema doesn't have WELCOME)
-    const dbEmailType = (result.emailType === "WELCOME" ? "UNKNOWN" : result.emailType) as
-      | "LIFT_NOTE" | "EDITORIAL" | "PROMO" | "UNKNOWN";
+    // ── List matching ──
+    let listId: string | null = null;
+    if (result.list) {
+      const existingList = lists.find(l => l.name.toLowerCase() === result.list!.toLowerCase());
+      if (existingList) {
+        listId = existingList.id;
+        // Auto-link to publisher if not set
+        if (!existingList.publisherId && publisherId) {
+          await prisma.list.update({ where: { id: listId }, data: { publisherId } });
+        }
+      } else if (result.listConfidence >= 0.7) {
+        const newList = await prisma.list.create({
+          data: { name: result.list, publisherId, isIgnored: false },
+        });
+        listId = newList.id;
+      }
+    }
 
-    // Upsert topics, skipping ignored ones
-    const validTopics = (result.topics ?? []).filter(
-      (t) => t && !ignoredNames.has(t.toLowerCase())
-    );
+    // ── Guru matching ──
+    const guruIds: string[] = [];
+    for (const guruName of (result.gurus ?? [])) {
+      if (ignoredGuruNames.has(guruName.toLowerCase())) continue;
+      const existing = gurus.find(g => g.name.toLowerCase() === guruName.toLowerCase());
+      if (existing) {
+        guruIds.push(existing.id);
+        // Auto-link guru to list if not already linked
+        if (listId) {
+          const linked = await prisma.guruList.findFirst({ where: { guruId: existing.id, listId } });
+          if (!linked) {
+            await prisma.guruList.create({ data: { guruId: existing.id, listId, isPrimary: false } });
+          }
+        }
+      } else {
+        const newGuru = await prisma.guru.create({ data: { name: guruName } });
+        guruIds.push(newGuru.id);
+        if (listId) {
+          await prisma.guruList.create({ data: { guruId: newGuru.id, listId, isPrimary: false } });
+        }
+      }
+    }
 
+    // ── Topics ──
+    const dbEmailType = (result.emailType === "WELCOME" ? "UNKNOWN" : result.emailType) as "LIFT_NOTE" | "EDITORIAL" | "PROMO" | "UNKNOWN";
+    const validTopics = (result.topics ?? []).filter(t => t && !ignoredTopicNames.has(t.toLowerCase()));
     const topicRecords = await Promise.all(
-      validTopics.map((name) =>
-        prisma.topic.upsert({
-          where: { name: name.toLowerCase() },
-          update: {},
-          create: { name: name.toLowerCase() },
-        })
-      )
+      validTopics.map(name => prisma.topic.upsert({ where: { name: name.toLowerCase() }, update: {}, create: { name: name.toLowerCase() } }))
     );
 
-    // Save everything to the email
+    // ── Save ──
     await prisma.email.update({
       where: { id: emailId },
       data: {
         publisherId,
         publisherConfirmed: publisherId !== null,
+        listId,
+        listConfirmed: listId !== null,
         emailType: dbEmailType,
         aiSummary: result.summary || null,
         aiTicker: result.offer?.ticker || null,
         aiConfidence: result.publisherConfidence,
         isProcessed: true,
-        topics: {
-          deleteMany: {},
-          create: topicRecords.map((t) => ({ topicId: t.id, confidence: 1.0 })),
-        },
+        topics: { deleteMany: {}, create: topicRecords.map(t => ({ topicId: t.id, confidence: 1.0 })) },
+        gurus: { deleteMany: {}, create: guruIds.map(guruId => ({ guruId })) },
       },
     });
 
-    // Save offer if present
     if (result.offer?.url || result.offer?.promise) {
       await prisma.offer.upsert({
         where: { emailId },
-        update: {
-          url: result.offer.url,
-          promise: result.offer.promise,
-          ticker: result.offer.ticker,
-        },
-        create: {
-          emailId,
-          url: result.offer.url,
-          promise: result.offer.promise,
-          ticker: result.offer.ticker,
-        },
+        update: { url: result.offer.url, promise: result.offer.promise, ticker: result.offer.ticker },
+        create: { emailId, url: result.offer.url, promise: result.offer.promise, ticker: result.offer.ticker },
       });
     }
 
-    console.log(`✓ Analyzed: ${subject.substring(0, 50)} | type:${dbEmailType} | topics:${validTopics.join(",")} | publisher:${publisherId ? "matched" : "none"}`);
+    console.log(`✓ ${subject.substring(0, 50)} | ${dbEmailType} | list:${result.list ?? "none"} | gurus:${result.gurus?.join(",") ?? "none"}`);
   } catch (err) {
-    console.error(`✗ Analysis failed for [${emailId}] ${subject.substring(0, 50)}:`, err);
-    // Mark processed to avoid infinite retry, but leave type/topics empty
-    await prisma.email.update({
-      where: { id: emailId },
-      data: { isProcessed: true },
-    });
+    console.error(`✗ Analysis failed [${emailId}]:`, err);
+    await prisma.email.update({ where: { id: emailId }, data: { isProcessed: true } });
   }
 }

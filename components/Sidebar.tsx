@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Mail, Users, Tag, Hash, Search, Settings, Eye, RefreshCw, LogOut } from "lucide-react";
+import { LayoutDashboard, Mail, Users, Tag, Hash, Search, Settings, Eye, RefreshCw, LogOut, BookOpen, UserCircle } from "lucide-react";
 import { useState } from "react";
 
 const nav = [
   { href: "/", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/emails", icon: Mail, label: "Emails" },
   { href: "/publishers", icon: Users, label: "Publishers" },
+  { href: "/lists", icon: BookOpen, label: "Lists" },
+  { href: "/gurus", icon: UserCircle, label: "Gurus" },
   { href: "/topics", icon: Hash, label: "Topics" },
   { href: "/tags", icon: Tag, label: "Tags" },
   { href: "/search", icon: Search, label: "Search" },
