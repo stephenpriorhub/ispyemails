@@ -49,7 +49,14 @@ export default function EmailDetail({ email, publishers, allTags, isAdmin = fals
           <button onClick={()=>setView("text")} className={`text-xs px-2 py-1 rounded ${view==="text"?"bg-amber-500/10 text-amber-400":"text-gray-500 hover:text-gray-300"}`}>Plain Text</button>
         </div>
         <div className="flex-1 overflow-auto">
-          {view==="html"&&email.bodyHtml?<iframe srcDoc={email.bodyHtml} sandbox="allow-same-origin" className="w-full h-full border-none" title="Email body"/>:<pre className="p-4 text-sm text-gray-300 whitespace-pre-wrap font-mono">{email.bodyText??email.snippet??"No content available"}</pre>}
+          {view==="html"&&email.bodyHtml
+            ? <iframe
+                srcDoc={`<base target="_blank">${email.bodyHtml}`}
+                sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+                className="w-full h-full border-none"
+                title="Email body"
+              />
+            : <pre className="p-4 text-sm text-gray-300 whitespace-pre-wrap font-mono">{email.bodyText??email.snippet??"No content available"}</pre>}
         </div>
       </div>
       <div className="w-72 flex-shrink-0 overflow-y-auto bg-gray-900 space-y-4 p-4">

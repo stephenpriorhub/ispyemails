@@ -125,7 +125,7 @@ export default async function DashboardPage({
     <div className="p-6 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-white">Daily Brief</h1>
+        <h1 className="text-2xl font-bold text-white">Daily Briefing</h1>
       </div>
 
       {/* Stale alerts — always current, independent of date */}
@@ -212,25 +212,29 @@ export default async function DashboardPage({
               {placementBreakdown.length === 0 && <p className="text-xs text-gray-500">No data</p>}
             </div>
           </div>
-          {/* AI Intelligence widget */}
-          {recentLearnings.length > 0 && (
-            <div className="bg-gray-900 border border-amber-500/20 rounded-lg p-4">
-              <h2 className="font-semibold text-white text-sm mb-3 flex items-center gap-1.5">
-                <span className="text-amber-400">✦</span> New Things Learned
-              </h2>
-              <div className="space-y-2">
-                {recentLearnings.map(l => (
-                  <div key={l.id} className="flex items-start gap-1.5">
-                    {l.source === "AI_EMAIL"
-                      ? <Bot className="w-3 h-3 text-blue-400 flex-shrink-0 mt-0.5" />
-                      : <User className="w-3 h-3 text-amber-400 flex-shrink-0 mt-0.5" />}
-                    <p className="text-xs text-gray-300 leading-snug">{l.content}</p>
-                  </div>
-                ))}
-              </div>
-              <Link href="/intelligence" className="text-xs text-amber-400 hover:underline mt-3 block">View all →</Link>
-            </div>
-          )}
+          {/* AI Intelligence widget — always shown */}
+          <div className="bg-gray-900 border border-amber-500/20 rounded-lg p-4">
+            <h2 className="font-semibold text-white text-sm mb-3 flex items-center gap-1.5">
+              <span className="text-amber-400">✦</span> New Things Learned
+            </h2>
+            {recentLearnings.length > 0 ? (
+              <>
+                <div className="space-y-2">
+                  {recentLearnings.map(l => (
+                    <div key={l.id} className="flex items-start gap-1.5">
+                      {l.source === "AI_EMAIL"
+                        ? <Bot className="w-3 h-3 text-blue-400 flex-shrink-0 mt-0.5" />
+                        : <User className="w-3 h-3 text-amber-400 flex-shrink-0 mt-0.5" />}
+                      <p className="text-xs text-gray-300 leading-snug">{l.content}</p>
+                    </div>
+                  ))}
+                </div>
+                <Link href="/intelligence" className="text-xs text-amber-400 hover:underline mt-3 block">View all →</Link>
+              </>
+            ) : (
+              <p className="text-xs text-gray-600">No insights yet — go to <Link href="/intelligence" className="text-amber-400 hover:underline">Intelligence</Link> and run <Link href="/settings" className="text-amber-400 hover:underline">Extract</Link> in Settings.</p>
+            )}
+          </div>
 
           <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
             <h2 className="font-semibold text-white text-sm mb-3">Hot Topics</h2>
