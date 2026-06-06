@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Mail, Users, Tag, Hash, Search, Settings, Eye, RefreshCw, LogOut, ExternalLink } from "lucide-react";
+import { LayoutDashboard, Mail, Users, Tag, Hash, Search, Settings, Eye, RefreshCw, LogOut } from "lucide-react";
 import { useState } from "react";
 
 const nav = [
@@ -38,13 +38,6 @@ export default function Sidebar({ user }: Props) {
           <Eye className="w-5 h-5 text-amber-400" />
           <span className="font-bold text-white text-sm">iSpyEmails</span>
         </div>
-        {/* Back to hub link */}
-        <a
-          href={oxfordhubUrl}
-          className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-400 mt-1 transition-colors"
-        >
-          <ExternalLink className="w-3 h-3" /> OxfordHub
-        </a>
       </div>
 
       {/* Nav */}
