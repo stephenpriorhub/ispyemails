@@ -142,18 +142,26 @@ DEFINITIONS:
       const existing = gurus.find(g => g.name.toLowerCase() === guruName.toLowerCase());
       if (existing) {
         guruIds.push(existing.id);
-        // Auto-link guru to list if not already linked
+        // Auto-link guru to list — but SKIP if user has marked this association as ignored
         if (listId) {
-          const linked = await prisma.guruList.findFirst({ where: { guruId: existing.id, listId } });
+          const linked = await prisma.guruList.findUnique({ where: { guruId_listId: { guruId: existing.id, listId } } });
           if (!linked) {
             await prisma.guruList.create({ data: { guruId: existing.id, listId, isPrimary: false } });
+          } else if (linked.isIgnored) {
+            // User rejected this association — don't re-add
+          } else {
+            // Already linked, nothing to do
           }
         }
       } else {
         const newGuru = await prisma.guru.create({ data: { name: guruName } });
         guruIds.push(newGuru.id);
         if (listId) {
-          await prisma.guruList.create({ data: { guruId: newGuru.id, listId, isPrimary: false } });
+          // Check if this new guru was pre-rejected for this list
+          const rejected = await prisma.guruList.findUnique({ where: { guruId_listId: { guruId: newGuru.id, listId } } });
+          if (!rejected?.isIgnored) {
+            await prisma.guruList.upsert({ where: { guruId_listId: { guruId: newGuru.id, listId } }, update: {}, create: { guruId: newGuru.id, listId, isPrimary: false } });
+          }
         }
       }
     }

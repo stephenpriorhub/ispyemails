@@ -7,7 +7,10 @@ export default async function ListsPage() {
     prisma.list.findMany({
       include: {
         publisher: { select: { id: true, name: true } },
-        gurus: { include: { guru: { select: { id: true, name: true, isIgnored: true } } } },
+        gurus: {
+          where: { isIgnored: false },
+          include: { guru: { select: { id: true, name: true, isIgnored: true } } },
+        },
         _count: { select: { emails: true } },
       },
       orderBy: { name: "asc" },

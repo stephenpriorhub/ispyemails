@@ -109,6 +109,7 @@ model GuruList {
   guruId    String
   listId    String
   isPrimary Boolean @default(false)
+  isIgnored Boolean @default(false) // true = AI learned this guru is NOT on this list
   guru      Guru    @relation(fields: [guruId], references: [id], onDelete: Cascade)
   list      List    @relation(fields: [listId], references: [id], onDelete: Cascade)
   @@id([guruId, listId])

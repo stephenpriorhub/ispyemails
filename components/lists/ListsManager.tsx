@@ -29,6 +29,8 @@ export default function ListsManager({ lists: initial, publishers }: { lists: Li
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({ name: "", category: "FREE_EDITORIAL", publisherId: "" });
   const [loading, setLoading] = useState<string | null>(null);
+  const [filterPublisher, setFilterPublisher] = useState("all");
+  const [filterCategory, setFilterCategory] = useState("all");
 
   async function addList(e: React.FormEvent) {
     e.preventDefault();
@@ -74,6 +76,9 @@ export default function ListsManager({ lists: initial, publishers }: { lists: Li
   }
 
   const active = lists.filter(l => !l.isIgnored);
+  const filtered = active
+    .filter(l => filterPublisher === "all" || l.publisher?.id === filterPublisher)
+    .filter(l => filterCategory === "all" || l.category === filterCategory);
   const ignored = lists.filter(l => l.isIgnored);
 
   return (
@@ -86,6 +91,19 @@ export default function ListsManager({ lists: initial, publishers }: { lists: Li
         <button onClick={() => setShowAdd(!showAdd)} className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-sm font-medium rounded-lg transition-colors">
           <Plus className="w-4 h-4" />Add List
         </button>
+      </div>
+
+      {/* Filter bar */}
+      <div className="flex items-center gap-3 mb-4">
+        <select value={filterPublisher} onChange={e => setFilterPublisher(e.target.value)} className="py-1 px-2 bg-gray-800 border border-gray-700 rounded text-sm text-gray-300 focus:outline-none focus:border-amber-500">
+          <option value="all">All publishers</option>
+          {publishers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="py-1 px-2 bg-gray-800 border border-gray-700 rounded text-sm text-gray-300 focus:outline-none focus:border-amber-500">
+          <option value="all">All categories</option>
+          {CATEGORIES.map(c => <option key={c} value={c}>{catLabel(c)}</option>)}
+        </select>
+        <span className="text-xs text-gray-600">{filtered.length} lists</span>
       </div>
 
       {showAdd && (
@@ -108,7 +126,7 @@ export default function ListsManager({ lists: initial, publishers }: { lists: Li
       )}
 
       <div className="bg-gray-900 border border-gray-800 rounded-lg divide-y divide-gray-800">
-        {active.map(list => (
+        {filtered.map(list => (
           <div key={list.id}>
             {editing !== list.id && merging !== list.id && (
               <div className="flex items-center gap-4 px-4 py-3 group">
