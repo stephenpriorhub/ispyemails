@@ -3,9 +3,9 @@ import { useState } from "react";
 import { Settings, Mail, CheckCircle, AlertCircle, Plus, Database, RefreshCw } from "lucide-react";
 
 interface Account { email:string;isActive:boolean;lastSyncAt:Date|null;historyId:string|null }
-interface Props { accounts:Account[];connected:boolean;error?:string }
+interface Props { accounts:Account[];connected:boolean;error?:string;isAdmin?:boolean }
 
-export default function SettingsClient({ accounts, connected, error }: Props) {
+export default function SettingsClient({ accounts, connected, error, isAdmin = false }: Props) {
   const [initializing, setInitializing] = useState(false);
   const [initResult, setInitResult] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -62,9 +62,11 @@ export default function SettingsClient({ accounts, connected, error }: Props) {
             </h2>
             <p className="text-xs text-gray-500 mt-0.5">Connect your spy Gmail account. All emails sync automatically every 15 min.</p>
           </div>
-          <a href="/api/gmail/connect" className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black text-sm font-medium rounded transition-colors">
-            <Plus className="w-3.5 h-3.5" />Connect Gmail
-          </a>
+          {isAdmin && (
+            <a href="/api/gmail/connect" className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black text-sm font-medium rounded transition-colors">
+              <Plus className="w-3.5 h-3.5" />Connect Gmail
+            </a>
+          )}
         </div>
         <div className="divide-y divide-gray-800">
           {accounts.map(account => (
@@ -86,8 +88,9 @@ export default function SettingsClient({ accounts, connected, error }: Props) {
         </div>
       </div>
 
-      {/* Initialize / Re-analyze */}
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 mb-6">
+      {/* Initialize / Re-analyze — admin only */}
+      {!isAdmin && <p className="text-xs text-gray-600 mb-4">Contact an admin to manage sync settings.</p>}
+      {isAdmin && <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 mb-6">
         <h2 className="font-semibold text-white flex items-center gap-2 mb-1">
           <Database className="w-4 h-4 text-amber-400" />Initialize Publishers &amp; Analysis
         </h2>
@@ -107,7 +110,7 @@ export default function SettingsClient({ accounts, connected, error }: Props) {
         {initResult && (
           <p className="mt-3 text-xs text-gray-300">{initResult}</p>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
