@@ -1,14 +1,14 @@
 export const dynamic = "force-dynamic";
 // isAdmin: client-side auth handles role gating via AppShell/Sidebar
 import { prisma } from "@/lib/prisma";
-import { getServerIsAdmin } from "@/lib/server-role";
+
 
 import EmailList from "@/components/emails/EmailList";
 
 export default async function EmailsPage({
   searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const sp = await searchParams;
-  const isAdmin = await getServerIsAdmin();
+
 
 
   const page = parseInt(sp.page ?? "1"), limit = 50;
@@ -33,5 +33,5 @@ export default async function EmailsPage({
     prisma.list.findMany({ where:{isIgnored:false}, orderBy:{name:"asc"}, select:{id:true,name:true} }),
     prisma.guru.findMany({ where:{isIgnored:false,isSecondaryVoice:false}, orderBy:{name:"asc"}, select:{id:true,name:true} }),
   ]);
-  return <EmailList emails={emails} total={total} page={page} pages={Math.ceil(total/limit)} publishers={publishers} topics={topics} lists={lists} gurus={gurus} filters={{ publisherId:sp.publisher, topicId:sp.topic, placement:sp.placement, emailType:sp.type, search:sp.q, listId:sp.list, guruId:sp.guru, sortBy, order }} isAdmin={isAdmin} />;
+  return <EmailList emails={emails} total={total} page={page} pages={Math.ceil(total/limit)} publishers={publishers} topics={topics} lists={lists} gurus={gurus} filters={{ publisherId:sp.publisher, topicId:sp.topic, placement:sp.placement, emailType:sp.type, search:sp.q, listId:sp.list, guruId:sp.guru, sortBy, order }} isAdmin={true} />;
 }
