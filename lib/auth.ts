@@ -4,17 +4,14 @@
  * Users log in at oxfordhub.app. The session cookie is scoped to
  * .oxfordhub.app so it is automatically available at ispy.oxfordhub.app.
  *
- * We verify the session in two ways (in order of preference):
- *   1. Decode the NextAuth JWT locally using NEXTAUTH_SECRET (fast, no network)
- *   2. Call oxfordhub.app/api/verify with HUB_API_TOKEN (fallback)
+ * Verification: forward all cookies to oxfordhub.app/api/verify.
+ * OxfordHub reads its own session cookie and returns the user.
  */
 
 import { NextRequest } from "next/server";
-import { decode } from "next-auth/jwt";
 
 const OXFORDHUB_URL = process.env.OXFORDHUB_URL ?? "https://oxfordhub.app";
 const HUB_API_TOKEN = process.env.HUB_API_TOKEN ?? "";
-const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET ?? "";
 
 export interface HubUser {
   id: string;
@@ -25,59 +22,42 @@ export interface HubUser {
 
 /**
  * Verify a request is authenticated via OxfordHub.
- * Returns the user if authenticated, null if not.
+ * Forwards all cookies so OxfordHub finds its session regardless of cookie name variant.
  */
 export async function verifyHubSession(req: NextRequest): Promise<HubUser | null> {
-  // Try both cookie names (dev vs prod/HTTPS)
-  const sessionToken =
-    req.cookies.get("authjs.session-token")?.value ??
-    req.cookies.get("__Secure-authjs.session-token")?.value;
-
-  if (!sessionToken) return null;
-
-  // Path 1: Decode JWT locally if we have the shared secret (fast)
-  if (NEXTAUTH_SECRET) {
-    try {
-      const decoded = await decode({
-        token: sessionToken,
-        secret: NEXTAUTH_SECRET,
-        salt: process.env.NODE_ENV === "production"
-          ? "__Secure-authjs.session-token"
-          : "authjs.session-token",
-      });
-      if (decoded?.sub) {
-        return {
-          id: decoded.sub,
-          email: decoded.email as string,
-          name: decoded.name as string | null,
-          role: (decoded.role as string) ?? "user",
-        };
-      }
-    } catch {
-      // Fall through to API verify
-    }
+  if (!HUB_API_TOKEN) {
+    console.error("[auth] HUB_API_TOKEN not set");
+    return null;
   }
 
-  // Path 2: Call oxfordhub.app/api/verify (slightly slower but always works)
-  if (!HUB_API_TOKEN) return null;
+  const cookieHeader = req.headers.get("cookie") ?? "";
+
   try {
     const res = await fetch(`${OXFORDHUB_URL}/api/verify`, {
+      method: "GET",
       headers: {
         "x-hub-token": HUB_API_TOKEN,
-        cookie: `authjs.session-token=${sessionToken}`,
+        "cookie": cookieHeader,
       },
       cache: "no-store",
     });
-    if (!res.ok) return null;
+
+    if (!res.ok) {
+      console.error("[auth] verify returned", res.status);
+      return null;
+    }
+
     const data = await res.json();
     if (!data.authorized || !data.user) return null;
+
     return {
       id: data.user.id,
       email: data.user.email,
       name: data.user.name ?? null,
       role: data.user.role ?? "user",
     };
-  } catch {
+  } catch (err) {
+    console.error("[auth] verify error:", err);
     return null;
   }
 }
