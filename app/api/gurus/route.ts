@@ -15,12 +15,12 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { name, bio, notes } = await req.json();
+  const { name, notes, isSecondaryVoice } = await req.json();
   if (!name) return NextResponse.json({ error: "Name required" }, { status: 400 });
   const guru = await prisma.guru.upsert({
     where: { name },
-    update: { bio, notes },
-    create: { name, bio, notes },
+    update: { notes },
+    create: { name, notes, isSecondaryVoice: isSecondaryVoice ?? false },
   });
   return NextResponse.json(guru, { status: 201 });
 }

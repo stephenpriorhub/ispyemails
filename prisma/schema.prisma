@@ -94,15 +94,27 @@ model List {
 // ─── Gurus (editors/voices) ───────────────────────────────────────────────────
 
 model Guru {
-  id        String     @id @default(cuid())
-  name      String     @unique
-  bio       String?    @db.Text
-  notes     String?
-  isIgnored Boolean    @default(false)
-  createdAt DateTime   @default(now())
+  id               String     @id @default(cuid())
+  name             String     @unique
+  notes            String?
+  isIgnored        Boolean    @default(false)
+  isSecondaryVoice Boolean    @default(false) // contributor/managing editor, not primary voice
+  createdAt        DateTime   @default(now())
 
-  lists  GuruList[]
-  emails EmailGuru[]
+  lists           GuruList[]
+  emails          EmailGuru[]
+  // Secondary voice relationships
+  primaryGurus    SecondaryVoiceGuru[] @relation("SecondaryVoice")
+  secondaryVoices SecondaryVoiceGuru[] @relation("PrimaryGuru")
+}
+
+// Links a secondary voice to the primary guru(s) they support
+model SecondaryVoiceGuru {
+  secondaryVoiceId String
+  primaryGuruId    String
+  secondaryVoice   Guru   @relation("SecondaryVoice", fields: [secondaryVoiceId], references: [id], onDelete: Cascade)
+  primaryGuru      Guru   @relation("PrimaryGuru", fields: [primaryGuruId], references: [id], onDelete: Cascade)
+  @@id([secondaryVoiceId, primaryGuruId])
 }
 
 model GuruList {

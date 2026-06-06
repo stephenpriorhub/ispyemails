@@ -23,14 +23,26 @@ export async function analyzeEmail(
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  const [publishers, lists, gurus, existingTopics, ignoredTopics, ignoredGurus] = await Promise.all([
+  const [publishers, lists, gurus, existingTopics, ignoredTopics, ignoredGurus, secondaryVoices] = await Promise.all([
     prisma.publisher.findMany({ select: { id: true, name: true, domains: true, knownFromAddresses: true, type: true } }),
     prisma.list.findMany({ where: { isIgnored: false }, select: { id: true, name: true, publisherId: true } }),
-    prisma.guru.findMany({ where: { isIgnored: false }, select: { id: true, name: true } }),
+    prisma.guru.findMany({ where: { isIgnored: false }, select: { id: true, name: true, isSecondaryVoice: true } }),
     prisma.topic.findMany({ where: { isIgnored: false }, select: { name: true, synonyms: true } }),
     prisma.topic.findMany({ where: { isIgnored: true }, select: { name: true, synonyms: true } }),
     prisma.guru.findMany({ where: { isIgnored: true }, select: { name: true } }),
+    // Load secondary voices with their primary gurus for routing
+    prisma.secondaryVoiceGuru.findMany({
+      include: { secondaryVoice: { select: { id: true, name: true } }, primaryGuru: { select: { id: true, name: true } } },
+    }),
   ]);
+
+  // Build a map: secondary voice name → primary guru ids
+  const secondaryToPrimary = new Map<string, string[]>();
+  for (const sv of secondaryVoices) {
+    const key = sv.secondaryVoice.name.toLowerCase();
+    if (!secondaryToPrimary.has(key)) secondaryToPrimary.set(key, []);
+    secondaryToPrimary.get(key)!.push(sv.primaryGuruId);
+  }
 
   const rawBody = bodyText ?? (bodyHtml ? bodyHtml.replace(/<[^>]+>/g, " ") : "");
   const cleanBody = rawBody.replace(/\s+/g, " ").replace(/&#\d+;/g, " ").trim().substring(0, 4000);
@@ -53,7 +65,8 @@ BODY: ${cleanBody}
 
 KNOWN PUBLISHERS: ${publishers.map(p => `${p.name} (${p.domains.join(", ")}) [${p.type}]`).join(" | ") || "None"}
 KNOWN NEWSLETTERS/LISTS: ${lists.map(l => l.name).join(", ") || "None"}
-KNOWN EDITORS/GURUS: ${gurus.map(g => g.name).join(", ") || "None"}
+KNOWN PRIMARY EDITORS/GURUS: ${gurus.filter(g => !g.isSecondaryVoice).map(g => g.name).join(", ") || "None"}
+SECONDARY VOICES (contributors/managing editors — NOT primary gurus, do not tag as main guru): ${gurus.filter(g => g.isSecondaryVoice).map(g => g.name).join(", ") || "None"}
 EXISTING TOPICS (reuse): ${topicList || "None"}
 IGNORED TOPICS (never use): ${[...ignoredTopicNames].join(", ") || "None"}
 IGNORED GURUS (never use): ${[...ignoredGuruNames].join(", ") || "None"}
@@ -140,7 +153,19 @@ DEFINITIONS:
     for (const guruName of (result.gurus ?? [])) {
       if (ignoredGuruNames.has(guruName.toLowerCase())) continue;
       const existing = gurus.find(g => g.name.toLowerCase() === guruName.toLowerCase());
+
+      // If this name is a known secondary voice, route to their primary gurus instead
+      const primaryIds = secondaryToPrimary.get(guruName.toLowerCase());
+      if (primaryIds?.length) {
+        for (const pid of primaryIds) {
+          if (!guruIds.includes(pid)) guruIds.push(pid);
+        }
+        continue; // don't tag the secondary voice directly on the email
+      }
+
       if (existing) {
+        // Skip secondary voices from direct email tagging
+        if (existing.isSecondaryVoice) continue;
         guruIds.push(existing.id);
         // Auto-link guru to list — but SKIP if user has marked this association as ignored
         if (listId) {
