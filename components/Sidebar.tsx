@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Mail, Users, Tag, Hash, Search, Settings, Eye, RefreshCw, LogOut, BookOpen, UserCircle } from "lucide-react";
+import { LayoutDashboard, Mail, Users, Tag, Hash, Search, Settings, Eye, RefreshCw, LogOut, BookOpen, UserCircle, Brain } from "lucide-react";
 import { useState } from "react";
 
 const adminNav = [
@@ -33,7 +33,8 @@ export default function Sidebar({ user, isAdmin = false }: Props) {
     { href: "/publishers", icon: Users, label: "Publishers" },
     { href: "/lists", icon: BookOpen, label: "Lists" },
     { href: "/gurus", icon: UserCircle, label: "Gurus" },
-    { href: "/search", icon: Search, label: "Search" },
+    { href: "/intelligence", icon: Brain, label: "Intelligence" },
+  { href: "/search", icon: Search, label: "Search" },
   ];
 
   const allNav = isAdmin ? [...coreNav, ...adminNav] : coreNav;

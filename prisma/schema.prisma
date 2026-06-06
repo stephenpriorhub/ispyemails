@@ -63,7 +63,8 @@ model Publisher {
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
-  lists  List[]
+  lists     List[]
+  learnings  Learning[]
   emails Email[]
   gurus  Guru[]
 }
@@ -88,7 +89,8 @@ model List {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  gurus  GuruList[]
+  gurus     GuruList[]
+  learnings  Learning[]
   emails Email[]
 }
 
@@ -106,6 +108,7 @@ model Guru {
 
   lists           GuruList[]
   emails          EmailGuru[]
+  learnings       Learning[]
   // Secondary voice relationships
   primaryGurus    SecondaryVoiceGuru[] @relation("SecondaryVoice")
   secondaryVoices SecondaryVoiceGuru[] @relation("PrimaryGuru")
@@ -159,10 +162,11 @@ model Email {
   syncedAt           DateTime   @default(now())
   createdAt          DateTime   @default(now())
 
-  topics EmailTopic[]
-  tags   EmailTag[]
-  gurus  EmailGuru[]
-  offer  Offer?
+  topics    EmailTopic[]
+  tags      EmailTag[]
+  gurus     EmailGuru[]
+  offer     Offer?
+  learnings Learning[]
 
   @@index([receivedAt])
   @@index([fromEmail])
@@ -236,6 +240,44 @@ model EmailTag {
 }
 
 // ─── Offers ───────────────────────────────────────────────────────────────────
+
+// ─── Intelligence / Learnings ─────────────────────────────────────────────────
+
+enum LearningSource {
+  AI_EMAIL    // extracted from email content by Claude
+  USER_ACTION // logged when user merges, ignores, edits
+}
+
+enum LearningStatus {
+  PENDING
+  VALIDATED
+  IGNORED
+}
+
+enum LearningCategory {
+  GURU
+  PUBLISHER
+  LIST
+  TOPIC
+  GENERAL
+}
+
+model Learning {
+  id          String           @id @default(cuid())
+  content     String           @db.Text
+  source      LearningSource
+  category    LearningCategory @default(GENERAL)
+  status      LearningStatus   @default(PENDING)
+  emailId     String?
+  email       Email?           @relation(fields: [emailId], references: [id], onDelete: SetNull)
+  guruId      String?
+  guru        Guru?            @relation(fields: [guruId], references: [id], onDelete: SetNull)
+  publisherId String?
+  publisher   Publisher?       @relation(fields: [publisherId], references: [id], onDelete: SetNull)
+  listId      String?
+  list        List?            @relation(fields: [listId], references: [id], onDelete: SetNull)
+  createdAt   DateTime         @default(now())
+}
 
 model Offer {
   id      String  @id @default(cuid())

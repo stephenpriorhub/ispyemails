@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Mail, Users, TrendingUp, Inbox } from "lucide-react";
 import DashboardClient from "@/components/dashboard/DashboardClient";
 import LocalTime from "@/components/dashboard/LocalTime";
+import { Bot, User } from "lucide-react";
 
 const placementColors: Record<string,string> = {
   PRIMARY:"text-green-400 bg-green-400/10",
@@ -38,7 +39,7 @@ export default async function DashboardPage({
   const [
     totalEmails, todayEmails, weekEmails, totalPublishers,
     dayEmails, recentEmails, placementBreakdown, topTopics,
-    stalePublishers, staleLists,
+    stalePublishers, staleLists, recentLearnings,
   ] = await Promise.all([
     prisma.email.count(),
     prisma.email.count({ where: { receivedAt: { gte: todayStart, lt: todayEnd } } }),
@@ -81,6 +82,13 @@ export default async function DashboardPage({
         },
       },
       select: { id: true, name: true },
+    }),
+    // Recent learnings for dashboard widget
+    prisma.learning.findMany({
+      where: { status: "PENDING" },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      select: { id: true, content: true, source: true, category: true, createdAt: true },
     }),
   ]);
 
@@ -204,6 +212,26 @@ export default async function DashboardPage({
               {placementBreakdown.length === 0 && <p className="text-xs text-gray-500">No data</p>}
             </div>
           </div>
+          {/* AI Intelligence widget */}
+          {recentLearnings.length > 0 && (
+            <div className="bg-gray-900 border border-amber-500/20 rounded-lg p-4">
+              <h2 className="font-semibold text-white text-sm mb-3 flex items-center gap-1.5">
+                <span className="text-amber-400">✦</span> New Things Learned
+              </h2>
+              <div className="space-y-2">
+                {recentLearnings.map(l => (
+                  <div key={l.id} className="flex items-start gap-1.5">
+                    {l.source === "AI_EMAIL"
+                      ? <Bot className="w-3 h-3 text-blue-400 flex-shrink-0 mt-0.5" />
+                      : <User className="w-3 h-3 text-amber-400 flex-shrink-0 mt-0.5" />}
+                    <p className="text-xs text-gray-300 leading-snug">{l.content}</p>
+                  </div>
+                ))}
+              </div>
+              <Link href="/intelligence" className="text-xs text-amber-400 hover:underline mt-3 block">View all →</Link>
+            </div>
+          )}
+
           <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
             <h2 className="font-semibold text-white text-sm mb-3">Hot Topics</h2>
             <div className="space-y-2">

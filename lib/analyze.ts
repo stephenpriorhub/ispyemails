@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { logAILearning } from "./learnings";
 
 interface AnalysisResult {
   publisher: string | null;
@@ -10,6 +11,7 @@ interface AnalysisResult {
   topics: string[];
   offer: { url: string | null; promise: string | null; ticker: string | null };
   summary: string;
+  learnings: { text: string; category: "GURU" | "PUBLISHER" | "LIST" | "TOPIC" | "GENERAL" }[];
 }
 
 export async function analyzeEmail(
@@ -81,8 +83,17 @@ Return ONLY this JSON:
   "emailType": "LIFT_NOTE|EDITORIAL|PROMO|WELCOME|UNKNOWN",
   "topics": ["topic1", "topic2"],
   "offer": { "url": "https://... or null", "promise": "pitch or null", "ticker": "TICK or null" },
-  "summary": "2-3 sentence summary of what this email is about."
+  "summary": "2-3 sentence summary of what this email is about.",
+  "learnings": [
+    { "text": "Significant insight about a guru, publisher, or list. Only include if genuinely notable.", "category": "GURU|PUBLISHER|LIST|TOPIC|GENERAL" }
+  ]
 }
+
+LEARNING RULES — only include learnings that are SIGNIFICANT and NOVEL:
+- Good: "Jim Rickards launched a new gold-focused service", "Tim Sykes partnered with Jon Najarian", "Daily Reckoning added crypto coverage"
+- Good: "James Rickards appears to be the same person as Jim Rickards based on content similarity"
+- Bad: generic facts, obvious things, repeated info, basic email classification
+- Max 2 learnings per email. Empty array if nothing significant.
 
 DEFINITIONS:
 - list: The NEWSLETTER NAME shown in the masthead/header (e.g. "Daily Reckoning", "Stansberry Digest"). Distinct from the publisher company.
@@ -224,7 +235,20 @@ DEFINITIONS:
       });
     }
 
-    console.log(`✓ ${subject.substring(0, 50)} | ${dbEmailType} | list:${result.list ?? "none"} | gurus:${result.gurus?.join(",") ?? "none"}`);
+    // Save AI learnings
+    for (const learning of (result.learnings ?? [])) {
+      if (learning.text?.trim()) {
+        await logAILearning({
+          content: learning.text.trim(),
+          category: learning.category ?? "GENERAL",
+          emailId,
+          publisherId: publisherId ?? undefined,
+          listId: listId ?? undefined,
+        });
+      }
+    }
+
+    console.log(`✓ ${subject.substring(0, 50)} | ${dbEmailType} | list:${result.list ?? "none"} | learnings:${result.learnings?.length ?? 0}`);
   } catch (err) {
     console.error(`✗ Analysis failed [${emailId}]:`, err);
     await prisma.email.update({ where: { id: emailId }, data: { isProcessed: true } });
