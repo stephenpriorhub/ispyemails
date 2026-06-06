@@ -1,26 +1,13 @@
+// Middleware is kept minimal — just passes cookies through as headers
+// so the app layout (Node.js runtime) can do the actual auth check.
+// Edge runtime has network restrictions that prevent fetching oxfordhub.app.
 import { NextRequest, NextResponse } from "next/server";
-import { verifyHubSession, loginUrl } from "@/lib/auth";
 
-// Public paths that don't need auth
-const PUBLIC = ["/api/auth", "/api/sync", "/_next", "/favicon"];
-
-export async function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
-
-  // Skip public paths
-  if (PUBLIC.some((p) => pathname.startsWith(p))) return NextResponse.next();
-
-  const user = await verifyHubSession(req);
-  if (!user) {
-    return NextResponse.redirect(loginUrl(req.url));
-  }
-
-  // Pass user info to pages via headers (readable in Server Components)
+export function middleware(req: NextRequest) {
   const res = NextResponse.next();
-  res.headers.set("x-user-id", user.id);
-  res.headers.set("x-user-email", user.email);
-  res.headers.set("x-user-name", user.name ?? "");
-  res.headers.set("x-user-role", user.role);
+  // Forward the cookie header so Server Components can read it
+  const cookies = req.headers.get("cookie") ?? "";
+  res.headers.set("x-forwarded-cookies", cookies);
   return res;
 }
 

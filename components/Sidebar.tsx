@@ -16,7 +16,7 @@ const nav = [
 ];
 
 interface Props {
-  user?: { name: string; email: string; role: string } | null;
+  user?: { id: string; name: string | null; email: string; role: string } | null;
 }
 
 export default function Sidebar({ user }: Props) {
