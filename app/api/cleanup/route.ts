@@ -22,7 +22,7 @@ export async function POST() {
     { name: "Agora Financial", domains: ["agorafinancial.com"] },
     { name: "Legacy Research", domains: ["legacyresearch.com"] },
     { name: "Porter & Company", domains: ["porterandcompanyresearch.com"] },
-    { name: "Monument Traders Alliance", domains: ["monumenttradersalliance.com"] },
+    { name: "Monument Traders Alliance", domains: ["monumenttradersalliance.com", "mtatradeoftheday.com", "mb.mtatradeoftheday.com"] },
     { name: "Market Rebellion", domains: ["marketrebellion.com"] },
     { name: "Brownstone Research", domains: ["brownstoneresearch.com", "e.brownstoneresearch.com"] },
     { name: "TradeSmith", domains: ["tradesmith.com", "exct.tradesmith.com"] },
