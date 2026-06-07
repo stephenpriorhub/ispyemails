@@ -1,6 +1,50 @@
 import { prisma } from "./prisma";
 import { logAILearning } from "./learnings";
 
+/**
+ * Extract list name from subject/from-address before AI runs.
+ * These patterns are highly reliable — no confidence threshold needed.
+ *
+ * Examples:
+ *   "Welcome to Altucher Confidential" → "Altucher Confidential"
+ *   "Welcome to the Daily Reckoning Family" → "Daily Reckoning"
+ *   AltucherConfidential@mb.paradigmpressgroup.com → "Altucher Confidential"
+ *   rude@mb.paradigmpressgroup.com → null (ambiguous)
+ */
+function extractListFromSignals(subject: string, fromEmail: string): string | null {
+  const subjectLower = subject.toLowerCase().trim();
+
+  // Pattern: "Welcome to [List Name]" or "Welcome to the [List Name]"
+  const welcomeMatch = subject.match(/^welcome\s+to\s+(?:the\s+)?(.+?)(?:\s+(?:family|newsletter|community|daily|weekly|!|🎉).*)?$/i);
+  if (welcomeMatch) {
+    const candidate = welcomeMatch[1].trim().replace(/[!🎉]+$/, "").trim();
+    if (candidate.length > 2 && candidate.length < 60) return candidate;
+  }
+
+  // Pattern: "You're in! Welcome to [List Name]"
+  const youreInMatch = subject.match(/welcome\s+to\s+(?:the\s+)?([A-Z][^!?.,]+)/i);
+  if (youreInMatch && !subjectLower.startsWith("re:")) {
+    const candidate = youreInMatch[1].trim();
+    if (candidate.length > 2 && candidate.length < 60) return candidate;
+  }
+
+  // Pattern: from-address local part looks like a newsletter name
+  // e.g. AltucherConfidential@mb.paradigmpressgroup.com → "Altucher Confidential"
+  // e.g. TradeoftheDay@mb.mtatradeoftheday.com → "Trade of the Day"
+  const localPart = fromEmail.split("@")[0] ?? "";
+  if (localPart.length > 4 && localPart.length < 40 && /^[A-Z]/.test(localPart)) {
+    // Convert CamelCase to spaced: "AltucherConfidential" → "Altucher Confidential"
+    const spaced = localPart
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+      .trim();
+    // Only use if it looks like a real name (2+ words or recognizable)
+    if (spaced.includes(" ") && spaced.length > 5) return spaced;
+  }
+
+  return null;
+}
+
 interface AnalysisResult {
   publisher: string | null;
   publisherConfidence: number;
@@ -150,20 +194,27 @@ DEFINITIONS:
     }
 
     // ── List matching ──
+    // Pre-processor: extract from subject/from-address before trusting AI result
+    const detectedListName = extractListFromSignals(subject, fromEmail) ?? result.list;
     let listId: string | null = null;
-    if (result.list) {
-      const existingList = lists.find(l => l.name.toLowerCase() === result.list!.toLowerCase());
+
+    if (detectedListName) {
+      const existingList = lists.find(l => l.name.toLowerCase() === detectedListName.toLowerCase());
       if (existingList) {
         listId = existingList.id;
-        // Auto-link to publisher if not set
         if (!existingList.publisherId && publisherId) {
           await prisma.list.update({ where: { id: listId }, data: { publisherId } });
         }
-      } else if (result.listConfidence >= 0.5) { // lower threshold — list names in subjects are reliable
-        const newList = await prisma.list.create({
-          data: { name: result.list, publisherId, isIgnored: false },
-        });
-        listId = newList.id;
+      } else {
+        // Pre-processor hits are always high-confidence; AI hits use threshold
+        const isPreProcessorHit = extractListFromSignals(subject, fromEmail) !== null;
+        const meetsThreshold = isPreProcessorHit || (result.listConfidence ?? 0) >= 0.5;
+        if (meetsThreshold) {
+          const newList = await prisma.list.create({
+            data: { name: detectedListName, publisherId, isIgnored: false },
+          });
+          listId = newList.id;
+        }
       }
     }
 
