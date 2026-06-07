@@ -34,18 +34,31 @@ export default function SettingsClient({ accounts, connected, error, isAdmin = f
     setInitializing(true);
     setInitResult(null);
     try {
-      // 1. Seed publishers + match existing emails by domain
-      // 1. Reset + seed publishers (fast)
+      // 1. Seed publishers + reset all emails to unprocessed
       const cleanup = await fetch("/api/cleanup", { method: "POST" });
       const cleanupData = await cleanup.json();
+      setInitResult(`Seeded ${cleanupData.publishersSeeded} publishers, reset ${cleanupData.emailsReset ?? 0} emails. Starting AI analysis…`);
 
-      // 2. Fire AI analysis in background — don't await, it takes time
-      fetch("/api/sync", { method: "POST" }).catch(() => {});
+      // 2. Process in batches of 8 until done (avoids Railway timeouts)
+      let totalProcessed = 0;
+      let remaining = cleanupData.emailsReset ?? 1;
+      let pass = 0;
+      while (remaining > 0 && pass < 50) {
+        pass++;
+        const res = await fetch("/api/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ batchSize: 8 }),
+        });
+        const data = await res.json();
+        if (!res.ok) { setInitResult(`❌ Analysis error: ${data.error ?? "unknown"}`); break; }
+        totalProcessed += data.processed ?? 0;
+        remaining = data.remaining ?? 0;
+        setInitResult(`Analyzing… ${totalProcessed} done, ${remaining} remaining`);
+        if (remaining === 0) break;
+      }
 
-      setInitResult(
-        `✅ Seeded ${cleanupData.publishersSeeded} publishers, reset ${cleanupData.emailsReset ?? "all"} emails. ` +
-        `AI analysis is running in the background — check Lists & Gurus tabs in ~1 minute.`
-      );
+      setInitResult(`✅ Done — ${totalProcessed} emails analyzed. Check Lists, Gurus & Topics tabs.`);
     } catch (err) {
       setInitResult(`❌ Error: ${err instanceof Error ? err.message : "Unknown"}`);
     } finally {
