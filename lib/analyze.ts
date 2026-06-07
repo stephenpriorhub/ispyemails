@@ -64,30 +64,39 @@ interface AnalysisResult {
  * These often contain the masthead newsletter name.
  */
 function extractMastheadSignals(html: string): string {
-  const top = html.substring(0, 5000);
+  const top = html.substring(0, 6000);
   const signals: string[] = [];
 
-  // Extract image alt text (mastheads are usually the first images)
-  const imgAlts = [...top.matchAll(/\balt=["']([^"']{3,60})["']/gi)];
-  for (const match of imgAlts.slice(0, 6)) {
-    const alt = match[1].trim();
-    // Skip generic alts
-    if (!["logo", "banner", "header", "image", "photo", "unsubscribe", "view"].some(g => alt.toLowerCase().includes(g))) {
-      signals.push(`Image: "${alt}"`);
+  // 1. HTML <title> tag — most reliable, always in the <head>
+  const titleTag = top.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  if (titleTag) {
+    const t = titleTag[1].trim().replace(/\s+/g, " ");
+    if (t.length > 2 && t.length < 80 && !t.toLowerCase().includes("<!")) {
+      signals.push(`Email title: "${t}"`);
     }
   }
 
-  // Extract h1 and h2 text
+  // 2. Image alt text (mastheads are usually the first images)
+  const imgAlts = [...top.matchAll(/\balt=["']([^"']{3,60})["']/gi)];
+  const skipAlts = ["logo", "banner", "header", "image", "photo", "unsubscribe", "view", "spacer", "pixel"];
+  for (const match of imgAlts.slice(0, 8)) {
+    const alt = match[1].trim();
+    if (!skipAlts.some(g => alt.toLowerCase().includes(g))) {
+      signals.push(`Image alt: "${alt}"`);
+    }
+  }
+
+  // 3. H1/H2 heading text
   const headings = [...top.matchAll(/<h[12][^>]*>([\s\S]*?)<\/h[12]>/gi)];
   for (const match of headings.slice(0, 3)) {
-    const text = match[1].replace(/<[^>]+>/g, "").replace(/&[a-z]+;/g, " ").trim();
+    const text = match[1].replace(/<[^>]+>/g, "").replace(/&[a-z#\d]+;/gi, " ").trim();
     if (text.length > 2 && text.length < 80) signals.push(`Heading: "${text}"`);
   }
 
-  // Extract title attributes (some mastheads use title on img or div)
-  const titles = [...top.matchAll(/\btitle=["']([A-Z][^"']{3,50})["']/gi)];
-  for (const match of titles.slice(0, 3)) {
-    signals.push(`Title: "${match[1].trim()}"`);
+  // 4. Title attributes on elements (e.g. <img title="Altucher Confidential">)
+  const titleAttrs = [...top.matchAll(/\btitle=["']([A-Z][^"']{3,50})["']/gi)];
+  for (const match of titleAttrs.slice(0, 3)) {
+    signals.push(`Title attr: "${match[1].trim()}"`);
   }
 
   return signals.length > 0 ? signals.join(" | ") : "";
