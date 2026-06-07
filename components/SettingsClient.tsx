@@ -11,6 +11,37 @@ export default function SettingsClient({ accounts, connected, error, isAdmin = f
   const [analyzing, setAnalyzing] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [extractResult, setExtractResult] = useState<string | null>(null);
+  const [fixingLists, setFixingLists] = useState(false);
+  const [fixListResult, setFixListResult] = useState<string | null>(null);
+
+  async function runFixMissingLists() {
+    setFixingLists(true);
+    setFixListResult(null);
+    let totalFixed = 0;
+    let remaining = 1;
+    let pass = 0;
+    try {
+      while (remaining > 0 && pass < 100) {
+        pass++;
+        const res = await fetch("/api/sync", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ batchSize: 8 }),
+        });
+        const data = await res.json();
+        if (!res.ok) { setFixListResult(`❌ Error: ${data.error ?? "unknown"}`); break; }
+        totalFixed += data.processed ?? 0;
+        remaining = data.remaining ?? 0;
+        setFixListResult(`Fixing… ${totalFixed} done, ${remaining} still missing lists`);
+        if (remaining === 0) break;
+      }
+      setFixListResult(`✅ Done — re-analyzed ${totalFixed} emails that were missing list detection.`);
+    } catch (err) {
+      setFixListResult(`❌ ${err instanceof Error ? err.message : "Unknown error"}`);
+    } finally {
+      setFixingLists(false);
+    }
+  }
 
   async function runExtractLearnings() {
     setExtracting(true);
@@ -165,6 +196,26 @@ export default function SettingsClient({ accounts, connected, error, isAdmin = f
         {extractResult && (
           <p className="mt-3 text-xs text-gray-300">{extractResult}</p>
         )}
+      </div>}
+
+      {/* Fix emails missing list detection */}
+      {isAdmin && <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 mb-6">
+        <h2 className="font-semibold text-white flex items-center gap-2 mb-1">
+          <RefreshCw className="w-4 h-4 text-blue-400" />Fix Missing Lists
+        </h2>
+        <p className="text-xs text-gray-500 mb-4">
+          Re-analyzes emails that have no list assigned yet. Runs in batches so it never times out.
+          Use this if Initialize didn&apos;t fully detect newsletter names.
+        </p>
+        <button
+          onClick={runFixMissingLists}
+          disabled={fixingLists}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium rounded transition-colors"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${fixingLists ? "animate-spin" : ""}`} />
+          {fixingLists ? "Fixing…" : "Fix Missing Lists"}
+        </button>
+        {fixListResult && <p className="mt-3 text-xs text-gray-300">{fixListResult}</p>}
       </div>}
     </div>
   );
