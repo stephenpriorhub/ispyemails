@@ -28,3 +28,10 @@ export async function POST(req: NextRequest) {
   });
   return NextResponse.json(learning, { status: 201 });
 }
+
+// DELETE: remove pending learnings that duplicate validated knowledge
+export async function DELETE() {
+  const { cleanupDuplicateLearnings } = await import("@/lib/learnings");
+  const removed = await cleanupDuplicateLearnings();
+  return NextResponse.json({ ok: true, removed });
+}

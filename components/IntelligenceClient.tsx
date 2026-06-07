@@ -194,11 +194,27 @@ export default function IntelligenceClient({ pending: initialPending, validated:
           )}
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm text-gray-400">{pending.length} items awaiting review</span>
-            {pending.length > 0 && (
-              <button onClick={validateAll} className="text-xs text-green-400 hover:text-green-300 px-2 py-1 rounded hover:bg-green-400/10 transition-colors">
-                Validate all
+            <div className="flex gap-2">
+              <button
+                onClick={async () => {
+                  const res = await fetch("/api/learnings", { method: "DELETE" });
+                  const data = await res.json();
+                  if (data.removed > 0) {
+                    // Reload page to refresh the list
+                    window.location.reload();
+                  }
+                }}
+                className="text-xs text-gray-500 hover:text-amber-400 px-2 py-1 rounded hover:bg-gray-800 transition-colors"
+                title="Remove pending items already covered by validated knowledge"
+              >
+                Clean duplicates
               </button>
-            )}
+              {pending.length > 0 && (
+                <button onClick={validateAll} className="text-xs text-green-400 hover:text-green-300 px-2 py-1 rounded hover:bg-green-400/10 transition-colors">
+                  Validate all
+                </button>
+              )}
+            </div>
           </div>
           <div className="bg-gray-900 border border-gray-800 rounded-lg divide-y divide-gray-800">
             {pending.map(l => (
