@@ -58,6 +58,41 @@ interface AnalysisResult {
   learnings: { text: string; category: "GURU" | "PUBLISHER" | "LIST" | "TOPIC" | "GENERAL" }[];
 }
 
+/**
+ * Extract newsletter name signals from the first ~3000 chars of email HTML.
+ * Looks at: image alt text, h1/h2 headings, title attributes.
+ * These often contain the masthead newsletter name.
+ */
+function extractMastheadSignals(html: string): string {
+  const top = html.substring(0, 5000);
+  const signals: string[] = [];
+
+  // Extract image alt text (mastheads are usually the first images)
+  const imgAlts = [...top.matchAll(/\balt=["']([^"']{3,60})["']/gi)];
+  for (const match of imgAlts.slice(0, 6)) {
+    const alt = match[1].trim();
+    // Skip generic alts
+    if (!["logo", "banner", "header", "image", "photo", "unsubscribe", "view"].some(g => alt.toLowerCase().includes(g))) {
+      signals.push(`Image: "${alt}"`);
+    }
+  }
+
+  // Extract h1 and h2 text
+  const headings = [...top.matchAll(/<h[12][^>]*>([\s\S]*?)<\/h[12]>/gi)];
+  for (const match of headings.slice(0, 3)) {
+    const text = match[1].replace(/<[^>]+>/g, "").replace(/&[a-z]+;/g, " ").trim();
+    if (text.length > 2 && text.length < 80) signals.push(`Heading: "${text}"`);
+  }
+
+  // Extract title attributes (some mastheads use title on img or div)
+  const titles = [...top.matchAll(/\btitle=["']([A-Z][^"']{3,50})["']/gi)];
+  for (const match of titles.slice(0, 3)) {
+    signals.push(`Title: "${match[1].trim()}"`);
+  }
+
+  return signals.length > 0 ? signals.join(" | ") : "";
+}
+
 export async function analyzeEmail(
   emailId: string,
   subject: string,
@@ -99,6 +134,10 @@ export async function analyzeEmail(
   const rawBody = bodyText ?? (bodyHtml ? bodyHtml.replace(/<[^>]+>/g, " ") : "");
   const cleanBody = rawBody.replace(/\s+/g, " ").replace(/&#\d+;/g, " ").trim().substring(0, 4000);
 
+  // Extract masthead signals from HTML: image alt text + heading tags
+  // These often contain the newsletter name even when plain text doesn't
+  const mastheadContext = bodyHtml ? extractMastheadSignals(bodyHtml) : "";
+
   const ignoredTopicNames = new Set([
     ...ignoredTopics.flatMap(t => [t.name.toLowerCase(), ...t.synonyms.map(s => s.toLowerCase())]),
   ]);
@@ -113,6 +152,9 @@ Analyze this email and return ONLY valid JSON — no markdown, no explanation.
 
 FROM: ${fromName || fromEmail} <${fromEmail}>
 SUBJECT: ${subject}
+MASTHEAD SIGNALS (image alt text, headings from top of email — newsletter name often here):
+${mastheadContext || "None detected"}
+
 BODY: ${cleanBody}
 
 KNOWN PUBLISHERS: ${publishers.map(p => `${p.name} (${p.domains.join(", ")}) [${p.type}]`).join(" | ") || "None"}
@@ -129,7 +171,7 @@ Return ONLY this JSON:
 {
   "publisher": "Publisher name from list or null",
   "publisherConfidence": 0.0,
-  "list": "Newsletter/list name or null — check masthead, header, AND subject line (e.g. 'Welcome to TRADE OF THE DAY' → list is 'Trade of the Day')",
+  "list": "Newsletter/list name — check MASTHEAD SIGNALS first (image alts/headings above), then subject, then body. e.g. Image:'ALTUCHER CONFIDENTIAL' → 'Altucher Confidential'",
   "listConfidence": 0.0,
   "gurus": ["Editor or author names found in the email"],
   "emailType": "LIFT_NOTE|EDITORIAL|PROMO|WELCOME|UNKNOWN",
