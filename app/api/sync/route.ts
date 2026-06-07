@@ -83,8 +83,10 @@ export async function PATCH(req: NextRequest) {
       processed++;
     } catch (err) {
       console.error("Re-analyze failed:", email.subject, err);
-      await prisma.email.update({ where: { id: email.id }, data: { isProcessed: true } });
     }
+    // Always mark processed after attempting — prevents infinite retry loop
+    // (if no list was found, it stays null but won't block future emails)
+    await prisma.email.update({ where: { id: email.id }, data: { isProcessed: true } });
   }
 
   const stillRemaining = await prisma.email.count({ where: { listId: null, isProcessed: true } });

@@ -245,8 +245,10 @@ DEFINITIONS:
     }
 
     // ── List matching ──
-    // Pre-processor: extract from subject/from-address before trusting AI result
-    const detectedListName = extractListFromSignals(subject, fromEmail) ?? result.list;
+    // Priority: pre-processor (subject/from-address) → AI result → masthead title tag
+    const preProcessorName = extractListFromSignals(subject, fromEmail);
+    const mastheadTitle = mastheadContext.match(/Email title: "([^"]+)"/)?.[1]?.trim();
+    const detectedListName = preProcessorName ?? result.list ?? mastheadTitle ?? null;
     let listId: string | null = null;
 
     if (detectedListName) {
@@ -257,14 +259,17 @@ DEFINITIONS:
           await prisma.list.update({ where: { id: listId }, data: { publisherId } });
         }
       } else {
-        // Pre-processor hits are always high-confidence; AI hits use threshold
-        const isPreProcessorHit = extractListFromSignals(subject, fromEmail) !== null;
-        const meetsThreshold = isPreProcessorHit || (result.listConfidence ?? 0) >= 0.5;
-        if (meetsThreshold) {
+        // No confidence threshold — if the name came from subject, from-address, title tag,
+        // or AI with any confidence, create it. The email itself is the evidence.
+        try {
           const newList = await prisma.list.create({
             data: { name: detectedListName, publisherId, isIgnored: false },
           });
           listId = newList.id;
+        } catch {
+          // Name may already exist (race condition) — try to find it
+          const found = await prisma.list.findFirst({ where: { name: { equals: detectedListName, mode: "insensitive" } } });
+          if (found) listId = found.id;
         }
       }
     }

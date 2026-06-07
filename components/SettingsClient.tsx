@@ -21,7 +21,7 @@ export default function SettingsClient({ accounts, connected, error, isAdmin = f
     let remaining = 1;
     let pass = 0;
     try {
-      while (remaining > 0 && pass < 100) {
+      while (remaining > 0 && pass < 200) {
         pass++;
         const res = await fetch("/api/sync", {
           method: "PATCH",
@@ -35,7 +35,7 @@ export default function SettingsClient({ accounts, connected, error, isAdmin = f
         setFixListResult(`Fixing… ${totalFixed} done, ${remaining} still missing lists`);
         if (remaining === 0) break;
       }
-      setFixListResult(`✅ Done — re-analyzed ${totalFixed} emails that were missing list detection.`);
+      setFixListResult(`✅ Done — ${totalFixed} emails re-analyzed.`);
     } catch (err) {
       setFixListResult(`❌ ${err instanceof Error ? err.message : "Unknown error"}`);
     } finally {
