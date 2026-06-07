@@ -59,6 +59,59 @@ interface AnalysisResult {
 }
 
 /**
+ * Lightweight list-name-only extraction. Used by the "Fix Missing Lists" endpoint.
+ * Tries pre-processor first, then HTML title tag, then a quick Claude call.
+ * Does NOT run full analysis — no topics, gurus, publishers.
+ */
+export async function extractListForEmail(
+  subject: string,
+  fromEmail: string,
+  bodyHtml: string | null
+): Promise<string | null> {
+  // 1. Pre-processor (subject pattern + from-address)
+  const fromPreProcessor = extractListFromSignals(subject, fromEmail);
+  if (fromPreProcessor) return fromPreProcessor;
+
+  // 2. HTML <title> tag
+  const html = bodyHtml ?? "";
+  const titleTag = html.substring(0, 2000).match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  if (titleTag) {
+    const t = titleTag[1].trim().replace(/\s+/g, " ");
+    if (t.length > 2 && t.length < 80 && !t.toLowerCase().includes("<!")) return t;
+  }
+
+  // 3. Image alt text in first 3000 chars
+  const mastheadSignals = extractMastheadSignals(html);
+  const imgAlt = mastheadSignals.match(/Image alt: "([^"]+)"/)?.[1];
+  if (imgAlt) return imgAlt;
+
+  // 4. Quick Claude call with just the key signals
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  try {
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const prompt = `Financial newsletter email.
+FROM: ${fromEmail}
+SUBJECT: ${subject}
+MASTHEAD SIGNALS: ${mastheadSignals || "none"}
+BODY START: ${(bodyHtml ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").substring(0, 1000)}
+
+What is the newsletter/list name? Reply with ONLY the name (e.g. "Daily Reckoning", "Altucher Confidential").
+If you cannot determine it, reply with the word NULL.`;
+
+    const msg = await client.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 50,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const reply = (msg.content[0] as { text: string }).text.trim();
+    if (reply && reply !== "NULL" && reply.length < 80 && !reply.includes("\n")) return reply;
+  } catch { /* ignore */ }
+
+  return null;
+}
+
+/**
  * Extract newsletter name signals from the first ~3000 chars of email HTML.
  * Looks at: image alt text, h1/h2 headings, title attributes.
  * These often contain the masthead newsletter name.

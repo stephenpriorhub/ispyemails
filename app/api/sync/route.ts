@@ -53,42 +53,52 @@ export async function DELETE() {
   return NextResponse.json({ ok: true, message: "historyId cleared — next sync will backfill all emails" });
 }
 
-// PATCH: force re-analyze emails missing list detection (ignores isProcessed flag)
+// PATCH: lightweight list-only detection for emails missing a list.
+// Does NOT re-run full analysis (no topics, gurus, publisher re-matching).
+// Just extracts the list name and assigns it.
 export async function PATCH(req: NextRequest) {
-  const { batchSize = 10 } = await req.json().catch(() => ({ batchSize: 10 }));
+  const { batchSize = 15 } = await req.json().catch(() => ({ batchSize: 15 }));
 
-  // Target emails that have no list assigned yet but are already processed
+  const remaining = await prisma.email.count({ where: { listId: null } });
   const emails = await prisma.email.findMany({
-    where: { listId: null, isProcessed: true },
-    select: { id: true, subject: true, fromName: true, fromEmail: true, bodyText: true, bodyHtml: true },
+    where: { listId: null },
+    select: { id: true, subject: true, fromEmail: true, bodyHtml: true, publisherId: true },
     take: batchSize,
     orderBy: { receivedAt: "desc" },
   });
 
-  const remaining = await prisma.email.count({ where: { listId: null, isProcessed: true } });
-
   if (!emails.length) return NextResponse.json({ processed: 0, remaining: 0 });
 
-  // Reset to unprocessed so analyzeEmail will run
-  await prisma.email.updateMany({
-    where: { id: { in: emails.map(e => e.id) } },
-    data: { isProcessed: false },
-  });
+  const { extractListForEmail } = await import("@/lib/analyze");
+  const existingLists = await prisma.list.findMany({ select: { id: true, name: true, publisherId: true } });
 
-  const { analyzeEmail } = await import("@/lib/analyze");
   let processed = 0;
   for (const email of emails) {
-    try {
-      await analyzeEmail(email.id, email.subject, email.fromName ?? "", email.fromEmail, email.bodyText, email.bodyHtml);
+    const listName = await extractListForEmail(email.subject, email.fromEmail, email.bodyHtml);
+    if (listName) {
+      // Find or create the list
+      const existing = existingLists.find(l => l.name.toLowerCase() === listName.toLowerCase());
+      let listId: string;
+      if (existing) {
+        listId = existing.id;
+      } else {
+        try {
+          const newList = await prisma.list.create({
+            data: { name: listName, publisherId: email.publisherId ?? null, isIgnored: false },
+          });
+          listId = newList.id;
+          existingLists.push({ id: listId, name: listName, publisherId: email.publisherId ?? null });
+        } catch {
+          const found = await prisma.list.findFirst({ where: { name: { equals: listName, mode: "insensitive" } } });
+          if (!found) continue;
+          listId = found.id;
+        }
+      }
+      await prisma.email.update({ where: { id: email.id }, data: { listId, listConfirmed: true } });
       processed++;
-    } catch (err) {
-      console.error("Re-analyze failed:", email.subject, err);
     }
-    // Always mark processed after attempting — prevents infinite retry loop
-    // (if no list was found, it stays null but won't block future emails)
-    await prisma.email.update({ where: { id: email.id }, data: { isProcessed: true } });
   }
 
-  const stillRemaining = await prisma.email.count({ where: { listId: null, isProcessed: true } });
+  const stillRemaining = await prisma.email.count({ where: { listId: null } });
   return NextResponse.json({ processed, remaining: stillRemaining });
 }
