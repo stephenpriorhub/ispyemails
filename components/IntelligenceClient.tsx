@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Brain, CheckCircle, XCircle, Bot, UserCog, ChevronDown, ChevronUp, AlertTriangle, Copy, Check, Download } from "lucide-react";
+import { Brain, CheckCircle, XCircle, Bot, UserCog, AlertTriangle, Send, CheckCheck } from "lucide-react";
 import Link from "next/link";
 
 interface Learning {
@@ -83,18 +83,6 @@ function LearningCard({ learning, onValidate, onIgnore }: {
   );
 }
 
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-      className="flex items-center gap-1 px-2 py-1 text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-700 rounded transition-colors"
-    >
-      {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-      {copied ? "Copied" : "Copy"}
-    </button>
-  );
-}
 
 export default function IntelligenceClient({ pending: initialPending, validated: initialValidated }: {
   pending: Learning[];
@@ -104,8 +92,10 @@ export default function IntelligenceClient({ pending: initialPending, validated:
   const [validated, setValidated] = useState(initialValidated);
   const [tab, setTab] = useState<"pending" | "validated" | "export">("pending");
   const [showValidated, setShowValidated] = useState(true);
-  const [exportBlocks, setExportBlocks] = useState<{ title: string; entity: string; markdown: string }[] | null>(null);
+  const [exportBlocks, setExportBlocks] = useState<{ title: string; entity: string; entityType: string; learningIds: string[]; appended: boolean; markdown: string }[] | null>(null);
   const [loadingExport, setLoadingExport] = useState(false);
+  const [pushing, setPushing] = useState(false);
+  const [pushResult, setPushResult] = useState<{ ok: boolean; message?: string; written?: string[] } | null>(null);
 
   const contradictions = pending.filter(l => l.isContradicted);
 
@@ -133,6 +123,26 @@ export default function IntelligenceClient({ pending: initialPending, validated:
     const data = await res.json();
     setExportBlocks(data.blocks);
     setLoadingExport(false);
+  }
+
+  async function pushToBrain() {
+    setPushing(true);
+    setPushResult(null);
+    try {
+      const res = await fetch("/api/learnings/export", { method: "POST" });
+      const data = await res.json();
+      if (data.ok) {
+        setPushResult({ ok: true, written: data.written });
+        // Reload blocks to show updated appended status
+        await loadExport();
+      } else {
+        setPushResult({ ok: false, message: data.error ?? "Push failed" });
+      }
+    } catch (err) {
+      setPushResult({ ok: false, message: err instanceof Error ? err.message : "Unknown error" });
+    } finally {
+      setPushing(false);
+    }
   }
 
   return (
@@ -219,25 +229,51 @@ export default function IntelligenceClient({ pending: initialPending, validated:
       {/* Export to Brain tab */}
       {tab === "export" && (
         <div>
-          <p className="text-xs text-gray-500 mb-4">
-            Validated intelligence formatted for the brain vault. Copy each block and append to the relevant markdown file in Obsidian.
-          </p>
-          {loadingExport && <p className="text-sm text-gray-500 py-8 text-center">Grouping validated learnings…</p>}
-          {exportBlocks && exportBlocks.length === 0 && (
-            <p className="text-sm text-gray-500 py-8 text-center">No validated learnings to export yet.</p>
-          )}
-          {exportBlocks && exportBlocks.map((block, i) => (
-            <div key={i} className="mb-4 bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-800/50">
-                <span className="text-xs font-medium text-white">{block.title}</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">Append to <code className="text-amber-400">{block.entity}.md</code></span>
-                  <CopyButton text={block.markdown} />
-                </div>
-              </div>
-              <pre className="p-4 text-xs text-gray-300 whitespace-pre-wrap font-mono overflow-x-auto">{block.markdown}</pre>
+          <div className="flex items-start justify-between mb-4">
+            <p className="text-xs text-gray-500 max-w-lg">
+              Pushes all validated intelligence directly to the brain vault markdown files.
+              Existing entries are updated in place — nothing gets duplicated.
+              Git commits automatically after writing.
+            </p>
+            <button
+              onClick={pushToBrain}
+              disabled={pushing || exportBlocks?.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black text-sm font-medium rounded-lg transition-colors flex-shrink-0 ml-4"
+            >
+              <Send className={`w-3.5 h-3.5 ${pushing ? "animate-pulse" : ""}`} />
+              {pushing ? "Pushing…" : "Push All to Brain"}
+            </button>
+          </div>
+
+          {pushResult && (
+            <div className={`mb-4 px-4 py-3 rounded-lg text-sm flex items-start gap-2 ${pushResult.ok ? "bg-green-500/10 border border-green-500/20 text-green-400" : "bg-red-500/10 border border-red-500/20 text-red-400"}`}>
+              {pushResult.ok
+                ? <><CheckCheck className="w-4 h-4 flex-shrink-0 mt-0.5" /><div>Pushed to brain vault and committed. Files: <code className="text-xs">{(pushResult.written ?? []).join(", ")}</code></div></>
+                : <><AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />{pushResult.message}</>}
             </div>
-          ))}
+          )}
+
+          {loadingExport && <p className="text-sm text-gray-500 py-8 text-center">Loading…</p>}
+          {exportBlocks?.length === 0 && <p className="text-sm text-gray-500 py-8 text-center">No validated learnings to push yet.</p>}
+
+          {exportBlocks && exportBlocks.length > 0 && (
+            <div className="bg-gray-900 border border-gray-800 rounded-lg divide-y divide-gray-800">
+              {exportBlocks.map((block, i) => (
+                <div key={i} className="flex items-center justify-between px-4 py-3">
+                  <div>
+                    <span className="text-sm text-white">{block.title}</span>
+                    <span className="text-xs text-gray-600 ml-2">→ <code>{block.entity}.md</code></span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-600">{block.learningIds.length} insight{block.learningIds.length !== 1 ? "s" : ""}</span>
+                    {block.appended
+                      ? <span className="flex items-center gap-1 text-xs text-green-400"><CheckCheck className="w-3 h-3" />Synced</span>
+                      : <span className="text-xs text-amber-400">Pending push</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
