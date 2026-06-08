@@ -22,6 +22,8 @@ function wordOverlap(a: string, b: string): number {
   return intersection / Math.min(wa.size, wb.size);
 }
 
+const OVERLAP_THRESHOLD = 0.50; // 50% — catches rephrased versions of the same insight
+
 /**
  * Check if this learning is already covered by existing validated knowledge.
  * Returns true if ≥65% word overlap with any validated learning for the same entity.
@@ -42,8 +44,7 @@ async function isDuplicate(opts: {
   const existing = await prisma.learning.findMany({ where, select: { content: true } });
 
   for (const v of existing) {
-    if (wordOverlap(opts.content, v.content) >= 0.65) return true;
-    // Also catch near-exact match regardless of entity link
+    if (wordOverlap(opts.content, v.content) >= OVERLAP_THRESHOLD) return true;
     if (opts.content.trim().toLowerCase() === v.content.trim().toLowerCase()) return true;
   }
   return false;
@@ -150,20 +151,45 @@ export async function logUserLearning(opts: {
 export async function cleanupDuplicateLearnings(): Promise<number> {
   const pending = await prisma.learning.findMany({
     where: { status: "PENDING" },
-    select: { id: true, content: true, guruId: true, publisherId: true, listId: true },
+    select: { id: true, content: true, guruId: true, publisherId: true, listId: true, createdAt: true },
+    orderBy: { createdAt: "asc" }, // keep earliest, remove later duplicates
   });
 
-  const toDelete: string[] = [];
+  const toDelete = new Set<string>();
 
+  // Pass 1: remove pending items that duplicate VALIDATED knowledge
   for (const p of pending) {
     if (await isDuplicate({ content: p.content, guruId: p.guruId ?? undefined, publisherId: p.publisherId ?? undefined, listId: p.listId ?? undefined })) {
-      toDelete.push(p.id);
+      toDelete.add(p.id);
     }
   }
 
-  if (toDelete.length) {
-    await prisma.learning.deleteMany({ where: { id: { in: toDelete } } });
+  // Pass 2: deduplicate within pending itself (keep earliest, remove near-duplicates)
+  // Group by entity for efficiency
+  const groups: Record<string, typeof pending> = {};
+  for (const p of pending) {
+    if (toDelete.has(p.id)) continue;
+    const key = p.guruId ?? p.publisherId ?? p.listId ?? "__general__";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(p);
   }
 
-  return toDelete.length;
+  for (const items of Object.values(groups)) {
+    for (let i = 0; i < items.length; i++) {
+      if (toDelete.has(items[i].id)) continue;
+      for (let j = i + 1; j < items.length; j++) {
+        if (toDelete.has(items[j].id)) continue;
+        const overlap = wordOverlap(items[i].content, items[j].content);
+        if (overlap >= OVERLAP_THRESHOLD || items[i].content.trim().toLowerCase() === items[j].content.trim().toLowerCase()) {
+          toDelete.add(items[j].id); // keep [i] (older), remove [j]
+        }
+      }
+    }
+  }
+
+  if (toDelete.size) {
+    await prisma.learning.deleteMany({ where: { id: { in: [...toDelete] } } });
+  }
+
+  return toDelete.size;
 }
