@@ -268,8 +268,9 @@ model Learning {
   source          LearningSource
   category        LearningCategory @default(GENERAL)
   status          LearningStatus   @default(PENDING)
-  isContradicted   Boolean          @default(false) // flags when this contradicts validated knowledge
-  appendedToBrain  Boolean          @default(false) // true once pushed to brain vault
+  isContradicted     Boolean          @default(false) // flags when this contradicts validated knowledge
+  contradictionNote  String?          @db.Text        // explains which validated fact this conflicts with
+  appendedToBrain    Boolean          @default(false) // true once pushed to brain vault
   appendedAt       DateTime?
   emailId     String?
   email       Email?           @relation(fields: [emailId], references: [id], onDelete: SetNull)

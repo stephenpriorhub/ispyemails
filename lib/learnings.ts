@@ -52,42 +52,55 @@ async function isDuplicate(opts: {
 
 /**
  * Check if a new learning contradicts existing validated knowledge.
+ * Returns null if no contradiction, or a note explaining the conflict.
  */
 async function detectContradiction(opts: {
   content: string;
   guruId?: string;
   publisherId?: string;
   listId?: string;
-}): Promise<boolean> {
+}): Promise<string | null> {
   const where: Record<string, unknown> = { status: "VALIDATED" };
   if (opts.guruId) where.guruId = opts.guruId;
   else if (opts.publisherId) where.publisherId = opts.publisherId;
   else if (opts.listId) where.listId = opts.listId;
-  else return false;
+  else return null;
 
   const existing = await prisma.learning.findMany({ where, select: { content: true } });
-  if (!existing.length) return false;
+  if (!existing.length) return null;
 
   const newLower = opts.content.toLowerCase();
-  const contradictionPairs = [
-    ["launched", "shut down"], ["launched", "closed"], ["launched", "discontinued"],
-    ["new", "retired"], ["new", "ended"],
-    ["partnered", "split"], ["partnered", "separated"],
-    ["same person", "different person"], ["merged", "split"],
-    ["primary editor", "secondary"], ["left", "joined"],
-    ["joined", "left"], ["no longer", "still"],
+  const contradictionPairs: [string, string, string][] = [
+    ["launched", "shut down", "new launch conflicts with shutdown"],
+    ["launched", "closed", "new launch conflicts with closure"],
+    ["launched", "discontinued", "new launch conflicts with discontinuation"],
+    ["new", "retired", "described as new but previously validated as retired"],
+    ["new", "ended", "described as new but previously validated as ended"],
+    ["partnered", "split", "partnership conflicts with split/separation"],
+    ["partnered", "separated", "partnership conflicts with separation"],
+    ["same person", "different person", "identity conflicts with existing validation"],
+    ["merged", "split", "merge conflicts with split"],
+    ["primary editor", "secondary", "primary editor role conflicts with secondary voice"],
+    ["left", "joined", "departure conflicts with join"],
+    ["joined", "left", "join conflicts with departure"],
+    ["no longer", "still", "negation conflicts with current status"],
   ];
 
   for (const validated of existing) {
     const valLower = validated.content.toLowerCase();
-    for (const [a, b] of contradictionPairs) {
+    for (const [a, b, reason] of contradictionPairs) {
       if (
         (newLower.includes(a) && valLower.includes(b)) ||
         (newLower.includes(b) && valLower.includes(a))
-      ) return true;
+      ) {
+        const snippet = validated.content.length > 80
+          ? validated.content.substring(0, 80) + "…"
+          : validated.content;
+        return `${reason.charAt(0).toUpperCase() + reason.slice(1)}. Validated fact: "${snippet}"`;
+      }
     }
   }
-  return false;
+  return null;
 }
 
 export async function logAILearning(opts: {
@@ -102,7 +115,7 @@ export async function logAILearning(opts: {
     // Skip if already covered by validated knowledge
     if (await isDuplicate(opts)) return;
 
-    const isContradicted = await detectContradiction(opts);
+    const contradictionNote = await detectContradiction(opts);
     await prisma.learning.create({
       data: {
         content: opts.content,
@@ -112,7 +125,8 @@ export async function logAILearning(opts: {
         guruId: opts.guruId,
         publisherId: opts.publisherId,
         listId: opts.listId,
-        isContradicted,
+        isContradicted: contradictionNote !== null,
+        contradictionNote: contradictionNote ?? undefined,
       },
     });
   } catch {

@@ -6,7 +6,9 @@ export default async function IntelligencePage() {
   const [pending, validated] = await Promise.all([
     prisma.learning.findMany({
       where: { status: "PENDING" },
-      include: {
+      select: {
+        id: true, content: true, source: true, category: true, status: true,
+        createdAt: true, isContradicted: true, contradictionNote: true,
         email: { select: { id: true, subject: true } },
         guru: { select: { id: true, name: true } },
         publisher: { select: { id: true, name: true } },
@@ -16,7 +18,9 @@ export default async function IntelligencePage() {
     }),
     prisma.learning.findMany({
       where: { status: "VALIDATED" },
-      include: {
+      select: {
+        id: true, content: true, source: true, category: true, status: true,
+        createdAt: true, isContradicted: true, contradictionNote: true,
         email: { select: { id: true, subject: true } },
         guru: { select: { id: true, name: true } },
         publisher: { select: { id: true, name: true } },

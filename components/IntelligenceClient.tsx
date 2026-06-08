@@ -6,6 +6,7 @@ import Link from "next/link";
 interface Learning {
   id: string; content: string; source: string; category: string;
   status: string; createdAt: string | Date; isContradicted: boolean;
+  contradictionNote?: string | null;
   email?: { id: string; subject: string } | null;
   guru?: { id: string; name: string } | null;
   publisher?: { id: string; name: string } | null;
@@ -47,15 +48,16 @@ function LearningCard({ learning, onValidate, onIgnore }: {
     <div className={`flex items-start gap-3 px-4 py-3 group ${learning.isContradicted ? "bg-amber-500/5" : ""}`}>
       <SourceBadge source={learning.source} />
       <div className="flex-1 min-w-0">
-        <div className="flex items-start gap-2">
-          {learning.isContradicted && (
-            <div className="flex items-center gap-1 text-amber-400 flex-shrink-0 mt-0.5" title="May contradict existing validated knowledge">
-              <AlertTriangle className="w-3.5 h-3.5" />
-              <span className="text-[10px] font-medium uppercase tracking-wide text-amber-400">Contradicts</span>
-            </div>
-          )}
-        </div>
         <p className="text-sm text-white leading-snug">{learning.content}</p>
+        {learning.isContradicted && (
+          <div className="flex items-start gap-1.5 mt-1.5 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5">
+            <AlertTriangle className="w-3 h-3 text-amber-400 flex-shrink-0 mt-0.5" />
+            <p className="text-[11px] text-amber-300 leading-snug">
+              <span className="font-semibold">Contradicts validated knowledge</span>
+              {learning.contradictionNote ? ` — ${learning.contradictionNote}` : ""}
+            </p>
+          </div>
+        )}
         <div className="flex items-center gap-2 mt-1 flex-wrap">
           <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${catColor[learning.category] ?? catColor.GENERAL}`}>
             {learning.category}
@@ -156,7 +158,7 @@ export default function IntelligenceClient({ pending: initialPending, validated:
           <span className="flex items-center gap-3 text-xs">
             <span className="flex items-center gap-1 text-blue-400"><Bot className="w-3 h-3" />AI detected</span>
             <span className="flex items-center gap-1 text-amber-400"><UserCog className="w-3 h-3" />Your action</span>
-            <span className="flex items-center gap-1 text-amber-400"><AlertTriangle className="w-3 h-3" />Contradicts validated</span>
+            <span className="flex items-center gap-1 text-amber-400"><AlertTriangle className="w-3 h-3" />Contradicts validated knowledge (shown inline)</span>
           </span>
         </p>
       </div>
