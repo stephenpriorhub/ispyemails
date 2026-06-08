@@ -29,9 +29,13 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(learning, { status: 201 });
 }
 
-// DELETE: remove pending learnings that duplicate validated knowledge
+// DELETE: remove pending learnings that duplicate validated knowledge,
+// and backfill contradiction notes on any flagged items missing them.
 export async function DELETE() {
-  const { cleanupDuplicateLearnings } = await import("@/lib/learnings");
-  const removed = await cleanupDuplicateLearnings();
-  return NextResponse.json({ ok: true, removed });
+  const { cleanupDuplicateLearnings, backfillContradictionNotes } = await import("@/lib/learnings");
+  const [removed, notesAdded] = await Promise.all([
+    cleanupDuplicateLearnings(),
+    backfillContradictionNotes(),
+  ]);
+  return NextResponse.json({ ok: true, removed, notesAdded });
 }

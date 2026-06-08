@@ -142,6 +142,8 @@ export async function logUserLearning(opts: {
   listId?: string;
 }) {
   try {
+    // User-action learnings start as PENDING so they appear in the review queue
+    // with the UserCog icon — user can validate or ignore them.
     await prisma.learning.create({
       data: {
         content: opts.content,
@@ -150,7 +152,7 @@ export async function logUserLearning(opts: {
         guruId: opts.guruId,
         publisherId: opts.publisherId,
         listId: opts.listId,
-        status: "VALIDATED",
+        status: "PENDING",
       },
     });
   } catch {
@@ -162,6 +164,31 @@ export async function logUserLearning(opts: {
  * Delete PENDING learnings that duplicate existing VALIDATED knowledge.
  * Run this to clean up existing duplicates.
  */
+/**
+ * Backfill contradictionNote for any isContradicted items that have no note yet.
+ * Safe to run multiple times.
+ */
+export async function backfillContradictionNotes(): Promise<number> {
+  const items = await prisma.learning.findMany({
+    where: { isContradicted: true, contradictionNote: null },
+    select: { id: true, content: true, guruId: true, publisherId: true, listId: true },
+  });
+  let updated = 0;
+  for (const item of items) {
+    const note = await detectContradiction({
+      content: item.content,
+      guruId: item.guruId ?? undefined,
+      publisherId: item.publisherId ?? undefined,
+      listId: item.listId ?? undefined,
+    });
+    if (note) {
+      await prisma.learning.update({ where: { id: item.id }, data: { contradictionNote: note } });
+      updated++;
+    }
+  }
+  return updated;
+}
+
 export async function cleanupDuplicateLearnings(): Promise<number> {
   const pending = await prisma.learning.findMany({
     where: { status: "PENDING" },
