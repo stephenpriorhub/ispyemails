@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { logUserLearning } from "@/lib/learnings";
 
 // POST /api/publishers/merge
 // body: { sourceId: string, targetId: string }
@@ -42,6 +43,13 @@ export async function POST(req: NextRequest) {
 
   // Delete source
   await prisma.publisher.delete({ where: { id: sourceId } });
+
+  // Log this as user intelligence (not brain-exportable)
+  await logUserLearning({
+    content: `Publisher "${source.name}" is the same as / merged into "${target.name}"`,
+    category: "PUBLISHER",
+    publisherId: targetId,
+  });
 
   return NextResponse.json({ ok: true, merged: source.name, into: target.name });
 }

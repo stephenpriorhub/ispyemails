@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { logUserLearning } from "@/lib/learnings";
 
 export async function POST(req: NextRequest) {
   const { sourceId, targetId } = await req.json();
@@ -27,7 +28,21 @@ export async function POST(req: NextRequest) {
     }
   }
   await prisma.guruList.deleteMany({ where: { guruId: sourceId } });
+
+  const [source, target] = await Promise.all([
+    prisma.guru.findUnique({ where: { id: sourceId }, select: { name: true } }),
+    prisma.guru.findUnique({ where: { id: targetId }, select: { name: true } }),
+  ]);
+
   await prisma.guru.delete({ where: { id: sourceId } });
+
+  if (source && target) {
+    await logUserLearning({
+      content: `"${source.name}" is the same person as / merged into "${target.name}"`,
+      category: "GURU",
+      guruId: targetId,
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }

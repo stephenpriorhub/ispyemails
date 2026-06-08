@@ -31,6 +31,7 @@ async function fetchLearnings(appendedOnly?: boolean) {
   return prisma.learning.findMany({
     where: {
       status: "VALIDATED",
+      source: "AI_EMAIL", // Never push user-action learnings (merges, ignores) to brain
       ...(appendedOnly === false ? { appendedToBrain: false } : {}),
     },
     include: {
