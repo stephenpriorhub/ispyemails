@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 export async function GET() {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "Not available in production" }, { status: 403 });
+  }
   return NextResponse.json({
     hasAnthropicKey: !!process.env.ANTHROPIC_API_KEY,
     hasDatabaseUrl: !!process.env.DATABASE_URL,

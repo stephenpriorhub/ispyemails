@@ -259,4 +259,3 @@ export default function PublishersClient({ publishers: initial, weekMap, isAdmin
     </div>
   );
 }
-// Note: type field added via direct edit below
