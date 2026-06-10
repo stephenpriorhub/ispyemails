@@ -5,20 +5,20 @@ const BRAIN_URL = process.env.BRAIN_URL ?? "https://brain.oxfordhub.app";
 const HUB_API_TOKEN = process.env.HUB_API_TOKEN ?? "";
 
 function groupLearnings(learnings: Awaited<ReturnType<typeof fetchLearnings>>) {
-  const byGuru: Record<string, { name: string; id: string; items: typeof learnings }> = {};
+  const byGuru: Record<string, { name: string; id: string; publisherName?: string; items: typeof learnings }> = {};
   const byPublisher: Record<string, { name: string; id: string; items: typeof learnings }> = {};
-  const byList: Record<string, { name: string; id: string; items: typeof learnings }> = {};
+  const byList: Record<string, { name: string; id: string; publisherName?: string; items: typeof learnings }> = {};
   const general: typeof learnings = [];
 
   for (const l of learnings) {
     if (l.guruId && l.guru) {
-      if (!byGuru[l.guruId]) byGuru[l.guruId] = { name: l.guru.name, id: l.guruId, items: [] };
+      if (!byGuru[l.guruId]) byGuru[l.guruId] = { name: l.guru.name, id: l.guruId, publisherName: l.guru.publisher?.name, items: [] };
       byGuru[l.guruId].items.push(l);
     } else if (l.publisherId && l.publisher) {
       if (!byPublisher[l.publisherId]) byPublisher[l.publisherId] = { name: l.publisher.name, id: l.publisherId, items: [] };
       byPublisher[l.publisherId].items.push(l);
     } else if (l.listId && l.list) {
-      if (!byList[l.listId]) byList[l.listId] = { name: l.list.name, id: l.listId, items: [] };
+      if (!byList[l.listId]) byList[l.listId] = { name: l.list.name, id: l.listId, publisherName: l.list.publisher?.name, items: [] };
       byList[l.listId].items.push(l);
     } else {
       general.push(l);
@@ -35,9 +35,9 @@ async function fetchLearnings(appendedOnly?: boolean) {
       ...(appendedOnly === false ? { appendedToBrain: false } : {}),
     },
     include: {
-      guru: { select: { name: true } },
+      guru: { select: { name: true, publisher: { select: { name: true } } } },
       publisher: { select: { name: true } },
-      list: { select: { name: true } },
+      list: { select: { name: true, publisher: { select: { name: true } } } },
       email: { select: { subject: true, receivedAt: true } },
     },
     orderBy: { createdAt: "desc" },
@@ -98,9 +98,10 @@ export async function POST() {
 
   // Build blocks for brain-map API
   const blocks = [
-    ...Object.values(byGuru).map(({ name, items }) => ({
+    ...Object.values(byGuru).map(({ name, publisherName, items }) => ({
       entityType: "guru" as const,
       entityName: name,
+      publisherName,
       items: items.map(l => ({
         content: l.content,
         source: l.source,
@@ -112,9 +113,10 @@ export async function POST() {
       entityName: name,
       items: items.map(l => ({ content: l.content, source: l.source, date: new Date(l.createdAt).toLocaleDateString() })),
     })),
-    ...Object.values(byList).map(({ name, items }) => ({
+    ...Object.values(byList).map(({ name, publisherName, items }) => ({
       entityType: "list" as const,
       entityName: name,
+      publisherName,
       items: items.map(l => ({ content: l.content, source: l.source, date: new Date(l.createdAt).toLocaleDateString() })),
     })),
     ...(general.length > 0 ? [{
