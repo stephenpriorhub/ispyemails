@@ -162,11 +162,12 @@ model Email {
   syncedAt           DateTime   @default(now())
   createdAt          DateTime   @default(now())
 
-  topics    EmailTopic[]
-  tags      EmailTag[]
-  gurus     EmailGuru[]
-  offer     Offer?
-  learnings Learning[]
+  topics        EmailTopic[]
+  tags          EmailTag[]
+  gurus         EmailGuru[]
+  offer         Offer?
+  learnings     Learning[]
+  deepAnalysis  EmailAnalysis?
 
   @@index([receivedAt])
   @@index([fromEmail])
@@ -290,4 +291,20 @@ model Offer {
   promise String? @db.Text
   ticker  String?
   email   Email   @relation(fields: [emailId], references: [id], onDelete: Cascade)
+}
+
+// ─── Deep Analysis (Pass 2 — Sonnet) ─────────────────────────────────────────
+
+model EmailAnalysis {
+  id             String   @id @default(cuid())
+  emailId        String   @unique
+  email          Email    @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  analysisType   String   // PROMO | LIFT_NOTE | EDITORIAL
+  rawJson        Json
+  complianceRisk String   @default("NONE")  // HIGH | MEDIUM | LOW | NONE
+  mtaOverlap     String   @default("LOW")   // HIGH | MEDIUM | LOW
+  notableFor     String?  // COPY | EDITORIAL | COMPLIANCE | PRODUCT | ALL
+  modelUsed      String   @default("claude-sonnet-4-5")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }

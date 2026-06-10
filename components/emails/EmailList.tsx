@@ -170,7 +170,7 @@ export default function EmailList({ emails,total,page,pages,publishers,topics,li
                   {email.list ? (
                     <button onClick={()=>updateFilter("list",email.list!.id)} className="text-xs text-gray-400 hover:text-amber-400 hover:underline text-left">{email.list.name}</button>
                   ) : (
-                    <span className="text-xs text-gray-600">—</span>
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-xs font-medium bg-amber-500/10 text-amber-400 border-amber-500/30" title="No list assigned — needs review">⚠ Needs review</span>
                   )}
                 </td>
                 <td className="px-4 pt-3 pb-2.5">
@@ -184,7 +184,7 @@ export default function EmailList({ emails,total,page,pages,publishers,topics,li
                         {i < email.topics.length - 1 && <span className="text-gray-700">, </span>}
                       </span>
                     ))}
-                    {email.topics.length === 0 && <span className="text-gray-700">—</span>}
+                    {email.topics.length === 0 && <span className="inline-flex items-center gap-1 px-1 rounded text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/30" title="No topics — needs review">⚠ Needs review</span>}
                   </p>
                 </td>
                 <td className="px-4 pt-3 pb-2.5 text-xs text-gray-500 whitespace-nowrap">

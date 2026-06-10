@@ -1,6 +1,192 @@
 import { prisma } from "./prisma";
 import { logAILearning } from "./learnings";
 
+// ─── Pass 2 types ─────────────────────────────────────────────────────────────
+
+interface DeepAnalysisInput {
+  id: string;
+  subject: string;
+  bodyHtml: string | null;
+  bodyText: string | null;
+  emailType: string;
+  publisherName: string | null;
+  listName: string | null;
+  guruName: string | null;
+  receivedAt: Date | string;
+}
+
+interface DeepAnalysisResult {
+  trade_recommendation: {
+    present: boolean;
+    ticker: string | null;
+    direction: string | null;
+    instrument: string | null;
+    strike: string | null;
+    expiry: string | null;
+    thesis_summary: string | null;
+  };
+  offer: {
+    product_name: string | null;
+    price_point: string | null;
+    original_price: string | null;
+    discount_framing: string | null;
+    guarantee: string | null;
+    urgency_type: string;
+    urgency_copy: string | null;
+    free_bonus_items: string[];
+    call_to_action: string | null;
+    landing_page_url: string | null;
+  };
+  marketing_tactics: {
+    lead_type: string | null;
+    hook_summary: string | null;
+    hook_quote: string | null;
+    narrative_frame: string | null;
+    credibility_signals: string[];
+    lift_note_promoter: string | null;
+    lift_note_subject: string | null;
+  };
+  compliance_signals: {
+    return_claims: string[];
+    win_rate_claims: string[];
+    testimonials_with_figures: string[];
+    guarantee_language: string | null;
+    risk_disclosure_present: boolean;
+    compliance_risk_level: string;
+    compliance_notes: string | null;
+  };
+  editorial_intel: {
+    market_thesis: string | null;
+    featured_tickers: string[];
+    sector_focus: string | null;
+    timeframe: string;
+    contrarian_or_consensus: string;
+    key_argument: string | null;
+  };
+  competitive_positioning: {
+    mta_overlap: string;
+    overlap_notes: string | null;
+    notable_for_team: string | null;
+  };
+}
+
+const DEEP_ANALYSIS_PROMPT: Record<string, string> = {
+  PROMO: `You are a senior competitive intelligence analyst for Monument Traders Alliance (MTA), a financial newsletter publisher.
+Analyze this PROMOTIONAL email from a competitor and extract intelligence in JSON format.
+Focus on: what they're selling, how they're selling it, compliance red flags, and how it compares to MTA's products.
+
+MTA context: Bryan Bottarelli (options/CBOE floor, WAR/PMK/WNM/TPU), Karim Rahemtulla (LEAPs/put-selling, WAR/UnboundF), Nate Bear (TPS system, $37k→$2.7M, PSU/DPL).`,
+
+  LIFT_NOTE: `You are a senior competitive intelligence analyst for Monument Traders Alliance (MTA), a financial newsletter publisher.
+Analyze this LIFT NOTE (affiliate promotion email) and extract intelligence in JSON format.
+Focus on: who is being promoted, the promotional tactics used, and any compliance issues.
+
+MTA context: Bryan Bottarelli (options/CBOE floor, WAR/PMK/WNM/TPU), Karim Rahemtulla (LEAPs/put-selling, WAR/UnboundF), Nate Bear (TPS system, $37k→$2.7M, PSU/DPL).`,
+
+  EDITORIAL: `You are a senior competitive intelligence analyst for Monument Traders Alliance (MTA), a financial newsletter publisher.
+Analyze this EDITORIAL email and extract intelligence in JSON format.
+Focus on: the market thesis, specific trade ideas, editorial positioning, and how the content compares to MTA's approach.
+
+MTA context: Bryan Bottarelli (options/CBOE floor, WAR/PMK/WNM/TPU), Karim Rahemtulla (LEAPs/put-selling, WAR/UnboundF), Nate Bear (TPS system, $37k→$2.7M, PSU/DPL).`,
+};
+
+/**
+ * Pass 2 — Deep analysis using Claude Sonnet.
+ * Fires after Pass 1 for PROMO, LIFT_NOTE, and EDITORIAL emails only.
+ * Saves result to EmailAnalysis table. Never throws — logs and returns null on failure.
+ */
+export async function runDeepAnalysis(input: DeepAnalysisInput): Promise<DeepAnalysisResult | null> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.warn("[DeepAnalysis] No ANTHROPIC_API_KEY — skipping");
+    return null;
+  }
+
+  const allowedTypes = ["PROMO", "LIFT_NOTE", "EDITORIAL"];
+  if (!allowedTypes.includes(input.emailType)) return null;
+
+  // Truncate body to 8,000 chars
+  const rawBody = input.bodyText ?? (input.bodyHtml ? input.bodyHtml.replace(/<[^>]+>/g, " ") : "");
+  const cleanBody = rawBody.replace(/\s+/g, " ").replace(/&#\d+;/g, " ").trim().substring(0, 8000);
+
+  const systemPrompt = DEEP_ANALYSIS_PROMPT[input.emailType] ?? DEEP_ANALYSIS_PROMPT.PROMO;
+
+  const userPrompt = `PUBLISHER: ${input.publisherName ?? "Unknown"}
+LIST: ${input.listName ?? "Unknown"}
+GURU/EDITOR: ${input.guruName ?? "Unknown"}
+SUBJECT: ${input.subject}
+DATE: ${input.receivedAt}
+EMAIL TYPE: ${input.emailType}
+
+BODY:
+${cleanBody}
+
+Return ONLY valid JSON (no markdown, no explanation) matching this exact schema:
+{
+  "trade_recommendation": { "present": false, "ticker": null, "direction": null, "instrument": null, "strike": null, "expiry": null, "thesis_summary": null },
+  "offer": { "product_name": null, "price_point": null, "original_price": null, "discount_framing": null, "guarantee": null, "urgency_type": "none", "urgency_copy": null, "free_bonus_items": [], "call_to_action": null, "landing_page_url": null },
+  "marketing_tactics": { "lead_type": null, "hook_summary": null, "hook_quote": null, "narrative_frame": null, "credibility_signals": [], "lift_note_promoter": null, "lift_note_subject": null },
+  "compliance_signals": { "return_claims": [], "win_rate_claims": [], "testimonials_with_figures": [], "guarantee_language": null, "risk_disclosure_present": false, "compliance_risk_level": "NONE", "compliance_notes": null },
+  "editorial_intel": { "market_thesis": null, "featured_tickers": [], "sector_focus": null, "timeframe": "unspecified", "contrarian_or_consensus": "neutral", "key_argument": null },
+  "competitive_positioning": { "mta_overlap": "LOW", "overlap_notes": null, "notable_for_team": null }
+}
+
+compliance_risk_level must be one of: HIGH, MEDIUM, LOW, NONE
+mta_overlap must be one of: HIGH, MEDIUM, LOW
+urgency_type examples: none, deadline, countdown, scarcity, event-driven`;
+
+  try {
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+    const message = await client.messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: 2048,
+      messages: [{ role: "user", content: `${systemPrompt}\n\n${userPrompt}` }],
+    });
+
+    const content = message.content[0];
+    if (content.type !== "text") throw new Error("Unexpected response type from Sonnet");
+
+    const jsonMatch = content.text.replace(/```json\n?/g, "").replace(/```\n?/g, "").match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("No JSON in Sonnet response");
+
+    const result: DeepAnalysisResult = JSON.parse(jsonMatch[0]);
+
+    const complianceRisk = result.compliance_signals?.compliance_risk_level ?? "NONE";
+    const mtaOverlap = result.competitive_positioning?.mta_overlap ?? "LOW";
+    const notableFor = result.competitive_positioning?.notable_for_team ?? null;
+
+    // Upsert so re-analysis overwrites the previous record
+    await prisma.emailAnalysis.upsert({
+      where: { emailId: input.id },
+      update: {
+        analysisType: input.emailType,
+        rawJson: result as object,
+        complianceRisk,
+        mtaOverlap,
+        notableFor,
+        modelUsed: "claude-sonnet-4-5",
+        updatedAt: new Date(),
+      },
+      create: {
+        emailId: input.id,
+        analysisType: input.emailType,
+        rawJson: result as object,
+        complianceRisk,
+        mtaOverlap,
+        notableFor,
+        modelUsed: "claude-sonnet-4-5",
+      },
+    });
+
+    console.log(`[DeepAnalysis] ${input.subject.substring(0, 50)} | risk:${complianceRisk} | overlap:${mtaOverlap}`);
+    return result;
+  } catch (err) {
+    console.error(`[DeepAnalysis] Failed [${input.id}]:`, err);
+    return null;
+  }
+}
+
 /**
  * Extract list name from subject/from-address before AI runs.
  * These patterns are highly reliable — no confidence threshold needed.
@@ -11,8 +197,35 @@ import { logAILearning } from "./learnings";
  *   AltucherConfidential@mb.paradigmpressgroup.com → "Altucher Confidential"
  *   rude@mb.paradigmpressgroup.com → null (ambiguous)
  */
+/**
+ * Hardcoded lookup table for from-addresses whose local parts are too short,
+ * lowercase-only, or otherwise ambiguous for the CamelCase heuristic.
+ * Key = full from-address (lowercased). Value = list name.
+ *
+ * Add entries here whenever a newsletter's sending address doesn't match
+ * the CamelCase pattern but the list name is known.
+ */
+const KNOWN_ADDRESS_TO_LIST: Record<string, string> = {
+  // Rude Awakening: sent from rude@mb.paradigmpressgroup.com
+  // This is a Paradigm Press editorial, NOT a publisher name.
+  "rude@mb.paradigmpressgroup.com": "Rude Awakening",
+};
+
+/**
+ * Hardcoded publisher overrides for known sending addresses.
+ * Prevents the AI from inventing a new publisher when the address is ambiguous.
+ * Key = from-address domain or full address. Value = publisher name hint for AI.
+ */
+const KNOWN_ADDRESS_PUBLISHER_HINT: Record<string, string> = {
+  "mb.paradigmpressgroup.com": "Paradigm Press",
+};
+
 function extractListFromSignals(subject: string, fromEmail: string): string | null {
   const subjectLower = subject.toLowerCase().trim();
+
+  // ── Hardcoded lookup — highest priority, catches ambiguous addresses ──
+  const knownList = KNOWN_ADDRESS_TO_LIST[fromEmail.toLowerCase()];
+  if (knownList) return knownList;
 
   // Pattern: "Welcome to [List Name]" or "Welcome to the [List Name]"
   const welcomeMatch = subject.match(/^welcome\s+to\s+(?:the\s+)?(.+?)(?:\s+(?:family|newsletter|community|daily|weekly|!|🎉).*)?$/i);
@@ -209,9 +422,17 @@ export async function analyzeEmail(
     .map(t => t.synonyms.length > 0 ? `${t.name} (also: ${t.synonyms.join(", ")})` : t.name)
     .join(", ");
 
+  // ── Classification hints for known ambiguous addresses ──
+  const emailDomainForHint = fromEmail.toLowerCase().split("@")[1] ?? "";
+  const publisherHint = KNOWN_ADDRESS_PUBLISHER_HINT[fromEmail.toLowerCase()] ?? KNOWN_ADDRESS_PUBLISHER_HINT[emailDomainForHint] ?? null;
+  const listHintFromTable = KNOWN_ADDRESS_TO_LIST[fromEmail.toLowerCase()] ?? null;
+  const classificationHints: string[] = [];
+  if (publisherHint) classificationHints.push(`PUBLISHER HINT: This email is from "${publisherHint}" — use this publisher name exactly.`);
+  if (listHintFromTable) classificationHints.push(`LIST HINT: This email belongs to the newsletter "${listHintFromTable}" — use this list name exactly.`);
+
   const prompt = `You are an expert analyst of financial newsletter emails in the direct-response publishing industry.
 Analyze this email and return ONLY valid JSON — no markdown, no explanation.
-
+${classificationHints.length > 0 ? "\n" + classificationHints.join("\n") + "\n" : ""}
 FROM: ${fromName || fromEmail} <${fromEmail}>
 SUBJECT: ${subject}
 MASTHEAD SIGNALS (image alt text, headings from top of email — newsletter name often here):
@@ -272,6 +493,35 @@ DEFINITIONS:
     const jsonMatch = content.text.replace(/```json\n?/g, "").replace(/```\n?/g, "").match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error(`No JSON in response`);
     const result: AnalysisResult = JSON.parse(jsonMatch[0]);
+
+    // ── Fallback: if AI returned no list, try extractListForEmail (pre-processor + HTML + mini-Claude) ──
+    if (!result.list || result.list.trim() === "") {
+      const fallbackList = await extractListForEmail(subject, fromEmail, bodyHtml);
+      if (fallbackList) {
+        console.log(`  ↳ fallback list extraction: "${fallbackList}"`);
+        result.list = fallbackList;
+        if (result.listConfidence === 0) result.listConfidence = 0.5;
+      }
+    }
+
+    // ── Fallback: if AI returned no topics, assign a default based on publisher name + subject ──
+    if (!result.topics || result.topics.length === 0) {
+      // Try to infer at least one topic from the subject line
+      const subjectLower = subject.toLowerCase();
+      const defaultTopics: string[] = [];
+      if (/crypto|bitcoin|btc|ethereum|eth|altcoin/i.test(subjectLower)) defaultTopics.push("crypto");
+      else if (/gold|silver|precious metal|commodity|commodities/i.test(subjectLower)) defaultTopics.push("commodities");
+      else if (/options|call|put|strike|expiry|theta|delta/i.test(subjectLower)) defaultTopics.push("options trading");
+      else if (/dividend|income|yield|reit/i.test(subjectLower)) defaultTopics.push("dividend investing");
+      else if (/ai|artificial intelligence|machine learning/i.test(subjectLower)) defaultTopics.push("technology");
+      else if (/biotech|pharmaceutical|fda|drug|clinical/i.test(subjectLower)) defaultTopics.push("biotech");
+      else if (/energy|oil|gas|solar|wind|renewable/i.test(subjectLower)) defaultTopics.push("energy");
+      else if (/forex|currency|dollar|yen|euro/i.test(subjectLower)) defaultTopics.push("forex");
+      else if (/real estate|housing|mortgage/i.test(subjectLower)) defaultTopics.push("real estate");
+      else defaultTopics.push("markets"); // universal fallback
+      result.topics = defaultTopics;
+      console.log(`  ↳ fallback topics assigned: ${defaultTopics.join(", ")}`);
+    }
 
     // ── Publisher matching ──
     const emailDomain = (fromEmail.toLowerCase().split("@")[1] ?? "");

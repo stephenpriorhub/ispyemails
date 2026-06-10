@@ -9,11 +9,13 @@ export default async function EmailDetailPage({ params }: { params: Promise<{ id
   const { id } = await params;
   const isAdmin = await getServerIsAdmin();
 
-  const [email, publishers, tags] = await Promise.all([
-    prisma.email.findUnique({ where: { id }, include: { publisher: true, list: { select: { id: true, name: true } }, topics: { include: { topic: true } }, tags: { include: { tag: true } }, offer: true } }),
+  const [email, publishers, tags, lists, allTopics] = await Promise.all([
+    prisma.email.findUnique({ where: { id }, include: { publisher: true, list: { select: { id: true, name: true } }, topics: { include: { topic: true } }, tags: { include: { tag: true } }, offer: true, deepAnalysis: true } }),
     prisma.publisher.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.tag.findMany({ orderBy: { name: "asc" } }),
+    prisma.list.findMany({ where: { isIgnored: false }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.topic.findMany({ where: { isIgnored: false }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
   if (!email) notFound();
-  return <EmailDetail email={email} publishers={publishers} allTags={tags} isAdmin={isAdmin} />;
+  return <EmailDetail email={email} publishers={publishers} allTags={tags} allLists={lists} allTopics={allTopics} isAdmin={isAdmin} />;
 }

@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
   if (!emails.length) return NextResponse.json({ processed: 0, remaining: 0 });
 
-  const { analyzeEmail } = await import("@/lib/analyze");
+  const { analyzeEmail, runDeepAnalysis } = await import("@/lib/analyze");
   let processed = 0;
   const errors: string[] = [];
 
@@ -37,6 +37,26 @@ export async function POST(req: NextRequest) {
     try {
       await analyzeEmail(email.id, email.subject, email.fromName ?? "", email.fromEmail, email.bodyText, email.bodyHtml);
       processed++;
+
+      // Pass 2: fire-and-forget deep analysis for PROMO, LIFT_NOTE, EDITORIAL
+      const DEEP_TYPES = ["PROMO", "LIFT_NOTE", "EDITORIAL"];
+      const updatedEmail = await prisma.email.findUnique({
+        where: { id: email.id },
+        select: { emailType: true, publisher: { select: { name: true } }, list: { select: { name: true } }, gurus: { include: { guru: { select: { name: true } } } } },
+      });
+      if (updatedEmail && DEEP_TYPES.includes(updatedEmail.emailType)) {
+        runDeepAnalysis({
+          id: email.id,
+          subject: email.subject,
+          bodyHtml: email.bodyHtml,
+          bodyText: email.bodyText,
+          emailType: updatedEmail.emailType,
+          publisherName: updatedEmail.publisher?.name ?? null,
+          listName: updatedEmail.list?.name ?? null,
+          guruName: updatedEmail.gurus[0]?.guru?.name ?? null,
+          receivedAt: new Date(),
+        }).catch(err => console.error(`[DeepAnalysis fire-and-forget] ${email.id}:`, err));
+      }
     } catch (err) {
       errors.push(`${email.subject.substring(0, 40)}: ${err instanceof Error ? err.message.substring(0, 60) : "unknown"}`);
       // Mark as processed to avoid infinite retry
