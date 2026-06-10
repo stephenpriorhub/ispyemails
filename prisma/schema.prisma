@@ -49,6 +49,7 @@ enum PublisherType {
   INTERNAL          // your own company
   COMPETITOR        // direct competitor
   AFFILIATE_MARKETER // third-party affiliate
+  UNKNOWN           // domain seen but publisher not yet identified
 }
 
 model Publisher {
@@ -86,6 +87,7 @@ model List {
   publisher   Publisher?   @relation(fields: [publisherId], references: [id])
   notes       String?
   isIgnored   Boolean      @default(false)
+  autoCreated Boolean      @default(false)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
@@ -198,6 +200,7 @@ enum EmailType {
   LIFT_NOTE
   EDITORIAL
   PROMO
+  WELCOME
   UNKNOWN
 }
 

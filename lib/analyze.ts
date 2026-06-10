@@ -272,6 +272,112 @@ interface AnalysisResult {
 }
 
 /**
+ * Ask Claude to identify the publisher from from-address + subject + body snippet.
+ * Returns a suggested publisher name, or null on failure.
+ */
+async function identifyPublisherViaClaude(
+  fromEmail: string,
+  subject: string,
+  bodySnippet: string
+): Promise<string | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  try {
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const msg = await client.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 60,
+      messages: [{
+        role: "user",
+        content: `Financial newsletter email.
+FROM: ${fromEmail}
+SUBJECT: ${subject}
+BODY SNIPPET: ${bodySnippet.substring(0, 500)}
+
+Who is the PUBLISHER COMPANY that sent this? (e.g. "Paradigm Press", "Stansberry Research", "Oxford Club").
+Reply with ONLY the publisher name. If totally unknown, reply with the domain slug (e.g. "paradigmpressgroup.com" → "Paradigm Press Group").`,
+      }],
+    });
+    const reply = (msg.content[0] as { text: string }).text.trim();
+    if (reply && reply.length < 80 && !reply.includes("\n")) return reply;
+  } catch { /* ignore */ }
+  return null;
+}
+
+/**
+ * Ask Claude to assign topics from the standard topic list.
+ */
+async function assignTopicsViaClaude(
+  subject: string,
+  bodySnippet: string,
+  availableTopics: string[]
+): Promise<string[]> {
+  if (!process.env.ANTHROPIC_API_KEY) return [];
+  try {
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const msg = await client.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 80,
+      messages: [{
+        role: "user",
+        content: `Financial newsletter email.
+SUBJECT: ${subject}
+BODY SNIPPET: ${bodySnippet.substring(0, 500)}
+
+AVAILABLE TOPICS: ${availableTopics.join(", ")}
+
+Assign 1–3 topics from the list above that best describe this email.
+Reply with ONLY a JSON array of topic names, e.g. ["options trading","markets"]. No other text.`,
+      }],
+    });
+    const text = (msg.content[0] as { text: string }).text.trim();
+    const match = text.match(/\[[\s\S]*\]/);
+    if (match) {
+      const parsed = JSON.parse(match[0]) as string[];
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed.slice(0, 3);
+    }
+  } catch { /* ignore */ }
+  return [];
+}
+
+/**
+ * Ask Claude to suggest a list name given publisher context.
+ */
+async function suggestListViaClaude(
+  fromEmail: string,
+  fromName: string,
+  subject: string,
+  bodySnippet: string,
+  knownLists: string[]
+): Promise<string | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  try {
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const msg = await client.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 60,
+      messages: [{
+        role: "user",
+        content: `Financial newsletter email.
+FROM NAME: ${fromName}
+FROM EMAIL: ${fromEmail}
+SUBJECT: ${subject}
+BODY SNIPPET: ${bodySnippet.substring(0, 500)}
+KNOWN LISTS FOR THIS PUBLISHER: ${knownLists.join(", ") || "none"}
+
+What is the newsletter/list name? If it matches a known list exactly, use that name.
+Reply with ONLY the name (e.g. "Daily Reckoning"). If you cannot determine it, reply NULL.`,
+      }],
+    });
+    const reply = (msg.content[0] as { text: string }).text.trim();
+    if (reply && reply !== "NULL" && reply.length < 80 && !reply.includes("\n")) return reply;
+  } catch { /* ignore */ }
+  return null;
+}
+
+/**
  * Lightweight list-name-only extraction. Used by the "Fix Missing Lists" endpoint.
  * Tries pre-processor first, then HTML title tag, then a quick Claude call.
  * Does NOT run full analysis — no topics, gurus, publishers.
@@ -504,26 +610,41 @@ DEFINITIONS:
       }
     }
 
-    // ── Fallback: if AI returned no topics, assign a default based on publisher name + subject ──
+    // ── Fallback: if AI returned no topics, try keyword heuristics then Claude then catch-all ──
     if (!result.topics || result.topics.length === 0) {
-      // Try to infer at least one topic from the subject line
       const subjectLower = subject.toLowerCase();
-      const defaultTopics: string[] = [];
-      if (/crypto|bitcoin|btc|ethereum|eth|altcoin/i.test(subjectLower)) defaultTopics.push("crypto");
-      else if (/gold|silver|precious metal|commodity|commodities/i.test(subjectLower)) defaultTopics.push("commodities");
-      else if (/options|call|put|strike|expiry|theta|delta/i.test(subjectLower)) defaultTopics.push("options trading");
-      else if (/dividend|income|yield|reit/i.test(subjectLower)) defaultTopics.push("dividend investing");
-      else if (/ai|artificial intelligence|machine learning/i.test(subjectLower)) defaultTopics.push("technology");
-      else if (/biotech|pharmaceutical|fda|drug|clinical/i.test(subjectLower)) defaultTopics.push("biotech");
-      else if (/energy|oil|gas|solar|wind|renewable/i.test(subjectLower)) defaultTopics.push("energy");
-      else if (/forex|currency|dollar|yen|euro/i.test(subjectLower)) defaultTopics.push("forex");
-      else if (/real estate|housing|mortgage/i.test(subjectLower)) defaultTopics.push("real estate");
-      else defaultTopics.push("markets"); // universal fallback
-      result.topics = defaultTopics;
-      console.log(`  ↳ fallback topics assigned: ${defaultTopics.join(", ")}`);
+      const keywordTopics: string[] = [];
+      if (/crypto|bitcoin|btc|ethereum|eth|altcoin/i.test(subjectLower)) keywordTopics.push("crypto");
+      else if (/gold|silver|precious metal|commodity|commodities/i.test(subjectLower)) keywordTopics.push("commodities");
+      else if (/options|call|put|strike|expiry|theta|delta/i.test(subjectLower)) keywordTopics.push("options trading");
+      else if (/dividend|income|yield|reit/i.test(subjectLower)) keywordTopics.push("dividend investing");
+      else if (/ai|artificial intelligence|machine learning/i.test(subjectLower)) keywordTopics.push("technology");
+      else if (/biotech|pharmaceutical|fda|drug|clinical/i.test(subjectLower)) keywordTopics.push("biotech");
+      else if (/energy|oil|gas|solar|wind|renewable/i.test(subjectLower)) keywordTopics.push("energy");
+      else if (/forex|currency|dollar|yen|euro/i.test(subjectLower)) keywordTopics.push("forex");
+      else if (/real estate|housing|mortgage/i.test(subjectLower)) keywordTopics.push("real estate");
+
+      if (keywordTopics.length > 0) {
+        result.topics = keywordTopics;
+        console.log(`  ↳ keyword fallback topics: ${keywordTopics.join(", ")}`);
+      } else {
+        // Ask Claude with the full topic list before falling back to "markets"
+        const claudeTopics = await assignTopicsViaClaude(
+          subject,
+          cleanBody,
+          existingTopics.map(t => t.name)
+        );
+        if (claudeTopics.length > 0) {
+          result.topics = claudeTopics;
+          console.log(`  ↳ Claude fallback topics: ${claudeTopics.join(", ")}`);
+        } else {
+          result.topics = ["markets"]; // universal catch-all
+          console.log(`  ↳ catch-all topic assigned: markets`);
+        }
+      }
     }
 
-    // ── Publisher matching ──
+    // ── Publisher matching — must always resolve ──
     const emailDomain = (fromEmail.toLowerCase().split("@")[1] ?? "");
     let publisherId: string | null = null;
 
@@ -539,34 +660,86 @@ DEFINITIONS:
         if (!domainMatch.knownFromAddresses.includes(fromEmail)) {
           await prisma.publisher.update({ where: { id: domainMatch.id }, data: { knownFromAddresses: { push: fromEmail } } });
         }
-      } else if (result.publisher && result.publisherConfidence >= 0.75) {
-        const newPub = await prisma.publisher.create({
-          data: { name: result.publisher, domains: emailDomain ? [emailDomain] : [], knownFromAddresses: [fromEmail], isConfirmed: false },
-        });
-        publisherId = newPub.id;
+      } else {
+        // No domain match — use AI result if confident, otherwise ask Claude specifically
+        let pubName = (result.publisher && result.publisherConfidence >= 0.5) ? result.publisher : null;
+        if (!pubName) {
+          pubName = await identifyPublisherViaClaude(fromEmail, subject, cleanBody);
+        }
+        if (!pubName) {
+          // Last resort: derive name from domain slug
+          pubName = emailDomain
+            .replace(/^(mb|info|mail|news|newsletter)\./i, "")
+            .split(".")[0]
+            .replace(/-/g, " ")
+            .replace(/\b\w/g, c => c.toUpperCase())
+            .trim() || emailDomain;
+        }
+        // Upsert to avoid duplicates on race conditions
+        try {
+          const newPub = await prisma.publisher.create({
+            data: { name: pubName, type: "UNKNOWN", domains: emailDomain ? [emailDomain] : [], knownFromAddresses: [fromEmail], isConfirmed: false },
+          });
+          publisherId = newPub.id;
+        } catch {
+          // Publisher with that name already exists (race) — find it
+          const found = await prisma.publisher.findFirst({ where: { name: { equals: pubName, mode: "insensitive" } } });
+          if (found) {
+            publisherId = found.id;
+            if (!found.knownFromAddresses.includes(fromEmail)) {
+              await prisma.publisher.update({ where: { id: found.id }, data: { knownFromAddresses: { push: fromEmail } } });
+            }
+          }
+        }
       }
     }
 
-    // ── List matching ──
-    // Priority: pre-processor (subject/from-address) → AI result → masthead title tag
+    // ── List matching — must always resolve ──
+    // Priority: pre-processor (subject/from-address) → AI result → masthead title tag → Claude fallback → from-name
     const preProcessorName = extractListFromSignals(subject, fromEmail);
     const mastheadTitle = mastheadContext.match(/Email title: "([^"]+)"/)?.[1]?.trim();
-    const detectedListName = preProcessorName ?? result.list ?? mastheadTitle ?? null;
+    let detectedListName: string | null = preProcessorName ?? result.list ?? mastheadTitle ?? null;
+
+    if (!detectedListName) {
+      // Ask Claude specifically about the list, with publisher context
+      const publisherLists = lists.filter(l => l.publisherId === publisherId).map(l => l.name);
+      const aiList = await suggestListViaClaude(fromEmail, fromName, subject, cleanBody, publisherLists);
+      detectedListName = aiList;
+    }
+
+    if (!detectedListName) {
+      // Last resort: derive from from-name or from-email local part
+      const localPart = fromEmail.split("@")[0] ?? "";
+      if (fromName && fromName.length > 2 && fromName.length < 80) {
+        detectedListName = fromName;
+      } else if (localPart.length > 2) {
+        // Convert CamelCase or slug → readable name
+        detectedListName = localPart
+          .replace(/([a-z])([A-Z])/g, "$1 $2")
+          .replace(/-/g, " ")
+          .replace(/\b\w/g, c => c.toUpperCase())
+          .trim();
+      } else {
+        detectedListName = emailDomain.split(".")[0].replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase()) || "Unknown List";
+      }
+      console.log(`  ↳ last-resort list name derived: "${detectedListName}"`);
+    }
+
     let listId: string | null = null;
 
     if (detectedListName) {
-      const existingList = lists.find(l => l.name.toLowerCase() === detectedListName.toLowerCase());
+      const existingList = lists.find(l => l.name.toLowerCase() === detectedListName!.toLowerCase());
       if (existingList) {
         listId = existingList.id;
         if (!existingList.publisherId && publisherId) {
           await prisma.list.update({ where: { id: listId }, data: { publisherId } });
         }
       } else {
-        // No confidence threshold — if the name came from subject, from-address, title tag,
-        // or AI with any confidence, create it. The email itself is the evidence.
+        // Create it — mark autoCreated so the UI can indicate it was AI-generated
+        const wasAutoCreated = !preProcessorName && !result.list && !mastheadTitle;
         try {
           const newList = await prisma.list.create({
-            data: { name: detectedListName, publisherId, isIgnored: false },
+            data: { name: detectedListName, publisherId, isIgnored: false, autoCreated: wasAutoCreated },
           });
           listId = newList.id;
         } catch {
@@ -621,7 +794,10 @@ DEFINITIONS:
     }
 
     // ── Topics ──
-    const dbEmailType = (result.emailType === "WELCOME" ? "UNKNOWN" : result.emailType) as "LIFT_NOTE" | "EDITORIAL" | "PROMO" | "UNKNOWN";
+    // WELCOME maps to EDITORIAL (most financial onboarding is editorial-flavoured)
+    // UNKNOWN → EDITORIAL as best-guess default — no email should ever be stored as UNKNOWN
+    const rawType = result.emailType ?? "UNKNOWN";
+    const dbEmailType = (rawType === "WELCOME" || rawType === "UNKNOWN" ? "EDITORIAL" : rawType) as "LIFT_NOTE" | "EDITORIAL" | "PROMO";
     const validTopics = (result.topics ?? []).filter(t => t && !ignoredTopicNames.has(t.toLowerCase()));
     const topicRecords = await Promise.all(
       validTopics.map(name => prisma.topic.upsert({ where: { name: name.toLowerCase() }, update: {}, create: { name: name.toLowerCase() } }))
@@ -669,6 +845,6 @@ DEFINITIONS:
     console.log(`✓ ${subject.substring(0, 50)} | ${dbEmailType} | list:${result.list ?? "none"} | learnings:${result.learnings?.length ?? 0}`);
   } catch (err) {
     console.error(`✗ Analysis failed [${emailId}]:`, err);
-    await prisma.email.update({ where: { id: emailId }, data: { isProcessed: true } });
+    // Do NOT mark as processed — leave isProcessed: false so the retry pass picks it up
   }
 }

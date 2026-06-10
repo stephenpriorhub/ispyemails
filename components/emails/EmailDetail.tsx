@@ -2,9 +2,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ExternalLink, RefreshCw, Check, Tag as TagIcon, Hash, Trash2, BookOpen, AlertTriangle } from "lucide-react";
+import { ArrowLeft, ExternalLink, RefreshCw, Check, Tag as TagIcon, Hash, Trash2, BookOpen } from "lucide-react";
 const pBadge: Record<string,string> = { PRIMARY:"bg-green-500/10 text-green-400 border-green-500/20", PROMOTIONS:"bg-amber-500/10 text-amber-400 border-amber-500/20", SPAM:"bg-red-500/10 text-red-400 border-red-500/20", UNKNOWN:"bg-gray-500/10 text-gray-400 border-gray-500/20" };
-const EMAIL_TYPES = ["LIFT_NOTE","EDITORIAL","PROMO","UNKNOWN"] as const;
+const EMAIL_TYPES = ["LIFT_NOTE","EDITORIAL","PROMO"] as const;
 
 // ─── Deep Analysis types ──────────────────────────────────────────────────────
 interface DeepAnalysis {
@@ -156,7 +156,6 @@ export default function EmailDetail({ email, publishers, allTags, allLists=[], a
   const [activeTagIds,setActiveTagIds] = useState(email.tags.map(t=>t.tag.id));
   const [activeTopicIds,setActiveTopicIds] = useState(email.topics.map(t=>t.topic.id));
   const [saving,setSaving] = useState(false), [analyzing,setAnalyzing] = useState(false), [deleting,setDeleting] = useState(false), [view,setView] = useState<"html"|"text">("html");
-  const needsReview = !email.list || email.topics.length === 0;
 
   async function deleteEmail() {
     if (!confirm(`Delete this email?\n\n"${email.subject}"\n\nThis cannot be undone.`)) return;
@@ -201,17 +200,6 @@ export default function EmailDetail({ email, publishers, allTags, allLists=[], a
         </div>
       </div>
       <div className="w-72 flex-shrink-0 overflow-y-auto bg-gray-900 space-y-4 p-4">
-        {/* Needs review banner */}
-        {needsReview && (
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 flex items-start gap-2">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0"/>
-            <div>
-              <p className="text-xs text-amber-400 font-medium">Needs review</p>
-              <p className="text-xs text-amber-400/70 mt-0.5">{[!email.list && "Missing list", email.topics.length===0 && "Missing topics"].filter(Boolean).join(" · ")}</p>
-            </div>
-          </div>
-        )}
-
         {/* AI Summary — always visible */}
         {email.aiSummary&&<div className="bg-gray-800 rounded-lg p-3"><p className="text-xs text-gray-500 mb-1">AI Summary</p><p className="text-xs text-gray-300 leading-relaxed">{email.aiSummary}</p></div>}
         {email.offer&&(email.offer.url||email.offer.promise)&&<div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3"><p className="text-xs text-amber-400 font-medium mb-2">Detected Offer</p>{email.offer.promise&&<p className="text-xs text-gray-300 leading-relaxed mb-2 italic">&quot;{email.offer.promise}&quot;</p>}{email.offer.ticker&&<p className="text-xs text-amber-400 mb-1">Ticker: ${email.offer.ticker}</p>}{email.offer.url&&<a href={email.offer.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-blue-400 hover:underline truncate"><ExternalLink className="w-3 h-3 flex-shrink-0"/><span className="truncate">{email.offer.url}</span></a>}</div>}
