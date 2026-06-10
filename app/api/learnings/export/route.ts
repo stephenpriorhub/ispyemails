@@ -89,11 +89,11 @@ export async function GET() {
   return NextResponse.json({ blocks, total: learnings.length });
 }
 
-// POST — push ALL validated learnings to brain vault
+// POST — push only un-pushed validated learnings to brain vault
 export async function POST() {
   if (!HUB_API_TOKEN) return NextResponse.json({ error: "HUB_API_TOKEN not configured" }, { status: 500 });
 
-  const learnings = await fetchLearnings();
+  const learnings = await fetchLearnings(false);
   const { byGuru, byPublisher, byList, general } = groupLearnings(learnings);
 
   // Build blocks for brain-map API
