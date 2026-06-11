@@ -65,7 +65,9 @@ export async function register() {
     console.error("[iSpyFinpub] Migration error:", err);
   }
 
-  const INTERVAL_MS = 3 * 60 * 60 * 1000; // 3 hours
+  const EMAIL_SYNC_INTERVAL_MS = 3 * 60 * 60 * 1000;  // 3 hours
+  const BRAIN_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000;  // 6 hours
+  const BRAIN_SYNC_OFFSET_MS   = 30 * 60 * 1000;      // 30-min offset from email sync
   const BASE_URL = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 
   async function runSync() {
@@ -80,10 +82,31 @@ export async function register() {
     }
   }
 
-  // Wait for server to be ready before first sync
+  async function runBrainSync() {
+    try {
+      const res = await fetch(`${BASE_URL}/api/cron/brain-sync`);
+      const data = await res.json() as { pushed?: number; errors?: string[] };
+      if (data.pushed && data.pushed > 0) {
+        console.log(`[iSpyFinpub] Brain-sync: pushed ${data.pushed} learning(s) to vault`);
+      } else if (data.errors?.length) {
+        console.error(`[iSpyFinpub] Brain-sync error: ${data.errors[0]}`);
+      }
+    } catch (err) {
+      console.error("[iSpyFinpub] Brain-sync failed:", err);
+    }
+  }
+
+  // Email sync — start after 10s, then every 3 hours
   setTimeout(() => {
     runSync();
-    setInterval(runSync, INTERVAL_MS);
-    console.log(`[iSpyFinpub] Auto-sync started — every 15 minutes`);
+    setInterval(runSync, EMAIL_SYNC_INTERVAL_MS);
+    console.log("[iSpyFinpub] Auto-sync started — every 3 hours");
   }, 10_000);
+
+  // Brain sync — start after 30.5 minutes (offset from email sync), then every 6 hours
+  setTimeout(() => {
+    runBrainSync();
+    setInterval(runBrainSync, BRAIN_SYNC_INTERVAL_MS);
+    console.log("[iSpyFinpub] Brain-sync started — every 6 hours");
+  }, BRAIN_SYNC_OFFSET_MS + 30_000);
 }

@@ -1,52 +1,9 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { exportLearningsToBrain, fetchAllValidatedLearnings, groupLearnings } from "@/lib/brain-export";
 
-const BRAIN_URL = process.env.BRAIN_URL ?? "https://brain.oxfordhub.app";
-const HUB_API_TOKEN = process.env.HUB_API_TOKEN ?? "";
-
-function groupLearnings(learnings: Awaited<ReturnType<typeof fetchLearnings>>) {
-  const byGuru: Record<string, { name: string; id: string; publisherName?: string; items: typeof learnings }> = {};
-  const byPublisher: Record<string, { name: string; id: string; items: typeof learnings }> = {};
-  const byList: Record<string, { name: string; id: string; publisherName?: string; items: typeof learnings }> = {};
-  const general: typeof learnings = [];
-
-  for (const l of learnings) {
-    if (l.guruId && l.guru) {
-      if (!byGuru[l.guruId]) byGuru[l.guruId] = { name: l.guru.name, id: l.guruId, publisherName: l.guru.publisher?.name, items: [] };
-      byGuru[l.guruId].items.push(l);
-    } else if (l.publisherId && l.publisher) {
-      if (!byPublisher[l.publisherId]) byPublisher[l.publisherId] = { name: l.publisher.name, id: l.publisherId, items: [] };
-      byPublisher[l.publisherId].items.push(l);
-    } else if (l.listId && l.list) {
-      if (!byList[l.listId]) byList[l.listId] = { name: l.list.name, id: l.listId, publisherName: l.list.publisher?.name, items: [] };
-      byList[l.listId].items.push(l);
-    } else {
-      general.push(l);
-    }
-  }
-  return { byGuru, byPublisher, byList, general };
-}
-
-async function fetchLearnings(appendedOnly?: boolean) {
-  return prisma.learning.findMany({
-    where: {
-      status: "VALIDATED",
-      source: "AI_EMAIL", // Never push user-action learnings (merges, ignores) to brain
-      ...(appendedOnly === false ? { appendedToBrain: false } : {}),
-    },
-    include: {
-      guru: { select: { name: true, publisher: { select: { name: true } } } },
-      publisher: { select: { name: true } },
-      list: { select: { name: true, publisher: { select: { name: true } } } },
-      email: { select: { subject: true, receivedAt: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-}
-
-// GET — returns grouped learnings for display in Export tab
+// GET — returns grouped validated learnings for display in Export tab
 export async function GET() {
-  const learnings = await fetchLearnings();
+  const learnings = await fetchAllValidatedLearnings();
   const { byGuru, byPublisher, byList, general } = groupLearnings(learnings);
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 
@@ -89,65 +46,20 @@ export async function GET() {
   return NextResponse.json({ blocks, total: learnings.length });
 }
 
-// POST — push only un-pushed validated learnings to brain vault
+// POST — push un-pushed eligible learnings to brain vault (manual "Push All to Brain" button)
 export async function POST() {
-  if (!HUB_API_TOKEN) return NextResponse.json({ error: "HUB_API_TOKEN not configured" }, { status: 500 });
+  const result = await exportLearningsToBrain();
 
-  const learnings = await fetchLearnings(false);
-  const { byGuru, byPublisher, byList, general } = groupLearnings(learnings);
-
-  // Build blocks for brain-map API
-  const blocks = [
-    ...Object.values(byGuru).map(({ name, publisherName, items }) => ({
-      entityType: "guru" as const,
-      entityName: name,
-      publisherName,
-      items: items.map(l => ({
-        content: l.content,
-        source: l.source,
-        date: new Date(l.createdAt).toLocaleDateString(),
-      })),
-    })),
-    ...Object.values(byPublisher).map(({ name, items }) => ({
-      entityType: "publisher" as const,
-      entityName: name,
-      items: items.map(l => ({ content: l.content, source: l.source, date: new Date(l.createdAt).toLocaleDateString() })),
-    })),
-    ...Object.values(byList).map(({ name, publisherName, items }) => ({
-      entityType: "list" as const,
-      entityName: name,
-      publisherName,
-      items: items.map(l => ({ content: l.content, source: l.source, date: new Date(l.createdAt).toLocaleDateString() })),
-    })),
-    ...(general.length > 0 ? [{
-      entityType: "general" as const,
-      entityName: "General",
-      items: general.map(l => ({ content: l.content, source: l.source, date: new Date(l.createdAt).toLocaleDateString() })),
-    }] : []),
-  ];
-
-  if (!blocks.length) return NextResponse.json({ ok: true, message: "Nothing to push", written: [] });
-
-  // Call brain-map
-  const brainRes = await fetch(`${BRAIN_URL}/api/intelligence`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-hub-token": HUB_API_TOKEN },
-    body: JSON.stringify({ blocks }),
-  });
-
-  if (!brainRes.ok) {
-    const err = await brainRes.text();
-    return NextResponse.json({ error: `Brain vault error: ${err}` }, { status: 502 });
+  if (result.errors.length > 0 && result.pushed === 0) {
+    return NextResponse.json({ error: result.errors[0] }, { status: result.errors[0].includes("HUB_API_TOKEN") ? 500 : 502 });
   }
 
-  const brainData = await brainRes.json();
-
-  // Mark all as appended
-  const allIds = learnings.map(l => l.id);
-  await prisma.learning.updateMany({
-    where: { id: { in: allIds } },
-    data: { appendedToBrain: true, appendedAt: new Date() },
+  return NextResponse.json({
+    ok: true,
+    message: result.pushed === 0 ? "Nothing to push" : `Pushed ${result.pushed} learnings`,
+    pushed: result.pushed,
+    skipped: result.skipped,
+    errors: result.errors,
+    marked: result.pushed,
   });
-
-  return NextResponse.json({ ok: true, ...brainData, marked: allIds.length });
 }
