@@ -111,6 +111,17 @@ export async function syncGmailAccount(accountEmail: string): Promise<{ newEmail
 }
 
 async function getRecentMessageIds(gmail: ReturnType<typeof google.gmail>): Promise<string[]> {
-  const res = await gmail.users.messages.list({ userId: "me", maxResults: 500, q: "newer_than:365d" });
-  return (res.data.messages ?? []).map((m) => m.id!).filter(Boolean);
+  const ids: string[] = [];
+  let pageToken: string | undefined;
+  do {
+    const res = await gmail.users.messages.list({
+      userId: "me",
+      maxResults: 500,
+      q: "newer_than:365d",
+      ...(pageToken ? { pageToken } : {}),
+    });
+    for (const m of res.data.messages ?? []) if (m.id) ids.push(m.id);
+    pageToken = res.data.nextPageToken ?? undefined;
+  } while (pageToken);
+  return ids;
 }
