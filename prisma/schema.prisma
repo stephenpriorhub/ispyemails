@@ -86,6 +86,7 @@ model List {
   publisherId String?
   publisher   Publisher?   @relation(fields: [publisherId], references: [id])
   notes       String?
+  synonyms    String[]
   isIgnored   Boolean      @default(false)
   autoCreated Boolean      @default(false)
   createdAt   DateTime     @default(now())

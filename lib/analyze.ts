@@ -487,7 +487,7 @@ export async function analyzeEmail(
 
   const [publishers, lists, gurus, existingTopics, ignoredTopics, ignoredGurus, secondaryVoices, validatedLearnings] = await Promise.all([
     prisma.publisher.findMany({ select: { id: true, name: true, domains: true, knownFromAddresses: true, type: true } }),
-    prisma.list.findMany({ where: { isIgnored: false }, select: { id: true, name: true, publisherId: true } }),
+    prisma.list.findMany({ where: { isIgnored: false }, select: { id: true, name: true, publisherId: true, synonyms: true } }),
     prisma.guru.findMany({ where: { isIgnored: false }, select: { id: true, name: true, isSecondaryVoice: true } }),
     prisma.topic.findMany({ where: { isIgnored: false }, select: { name: true, synonyms: true } }),
     prisma.topic.findMany({ where: { isIgnored: true }, select: { name: true, synonyms: true } }),
@@ -728,7 +728,11 @@ DEFINITIONS:
     let listId: string | null = null;
 
     if (detectedListName) {
-      const existingList = lists.find(l => l.name.toLowerCase() === detectedListName!.toLowerCase());
+      const detectedLower = detectedListName.toLowerCase();
+      const existingList = lists.find(l =>
+        l.name.toLowerCase() === detectedLower ||
+        l.synonyms.some(s => s.toLowerCase() === detectedLower)
+      );
       if (existingList) {
         listId = existingList.id;
         if (!existingList.publisherId && publisherId) {
