@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 export async function register() {
   // Only run in Node.js server runtime (not edge, not build time)
   if (process.env.NEXT_RUNTIME !== "nodejs") return;

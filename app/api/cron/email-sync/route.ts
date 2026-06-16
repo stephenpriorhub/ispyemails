@@ -3,8 +3,6 @@ import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
 import { syncGmailAccount } from "@/lib/sync";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 // Called by Railway cron every hour: GET /api/cron/email-sync
 // Protected by CRON_SECRET env var (set same value in Railway + cron job header)
 export async function GET(req: Request) {
@@ -39,6 +37,7 @@ export async function GET(req: Request) {
 
   // Send a single alert email if any accounts returned invalid_grant
   if (invalidGrantAccounts.length > 0) {
+    const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
     const accountList = invalidGrantAccounts.map((e) => `  • ${e}`).join("\n");
     const body = [
       "iSpy Gmail sync alert",
@@ -58,13 +57,17 @@ export async function GET(req: Request) {
     ].join("\n");
 
     try {
-      await resend.emails.send({
-        from: "onboarding@resend.dev",
-        to: "sprior@monumenttradersalliance.com",
-        subject: "[iSpy] Gmail sync broken — re-auth required",
-        text: body,
-      });
-      console.log(`[iSpyFinpub] Sent invalid_grant alert for: ${invalidGrantAccounts.join(", ")}`);
+      if (!resend) {
+        console.warn("[iSpyFinpub] RESEND_API_KEY not set — skipping invalid_grant alert email");
+      } else {
+        await resend.emails.send({
+          from: "onboarding@resend.dev",
+          to: "sprior@monumenttradersalliance.com",
+          subject: "[iSpy] Gmail sync broken — re-auth required",
+          text: body,
+        });
+        console.log(`[iSpyFinpub] Sent invalid_grant alert for: ${invalidGrantAccounts.join(", ")}`);
+      }
     } catch (alertErr) {
       console.error("[iSpyFinpub] Failed to send invalid_grant alert:", alertErr);
     }
