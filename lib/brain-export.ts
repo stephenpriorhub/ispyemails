@@ -16,7 +16,7 @@ const HUB_API_TOKEN = process.env.HUB_API_TOKEN ?? "";
 export const AUTO_APPROVE_CONFIDENCE = 0.75;
 
 /** Minimum number of corroborating emails from the same publisher/entity */
-export const AUTO_APPROVE_MIN_CORROBORATION = 2;
+export const AUTO_APPROVE_MIN_CORROBORATION = 1;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
