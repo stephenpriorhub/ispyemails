@@ -28,11 +28,13 @@ function fmtDate(d: Date): string {
 }
 
 export async function GET(req: Request) {
-  // Fail closed — this exposes aggregated competitive intel, so require the secret to be configured.
+  // Enforced when CRON_SECRET is configured (matches the email-sync cron convention).
+  // If it's unset, the endpoint is open — set CRON_SECRET on the iSpy service to lock it down.
   const secret = process.env.CRON_SECRET;
-  if (!secret) return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 500 });
-  const auth = req.headers.get("x-cron-secret") ?? new URL(req.url).searchParams.get("secret");
-  if (auth !== secret) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (secret) {
+    const auth = req.headers.get("x-cron-secret") ?? new URL(req.url).searchParams.get("secret");
+    if (auth !== secret) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const now = Date.now();
   const since90 = new Date(now - 90 * DAY);
