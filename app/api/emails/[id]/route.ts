@@ -31,7 +31,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{id:
   const { id } = await params;
   const email = await prisma.email.findUnique({ where:{id} });
   if (!email) return NextResponse.json({error:"Not found"},{status:404});
-  await analyzeEmail(email.id, email.subject, email.fromName??"", email.fromEmail, email.bodyText, email.bodyHtml);
+  await analyzeEmail(email.id, email.subject, email.fromName??"", email.fromEmail, email.bodyText, email.bodyHtml, email.toEmail);
   return NextResponse.json(await prisma.email.findUnique({where:{id},include:{publisher:true,topics:{include:{topic:true}},tags:{include:{tag:true}},offer:true}}));
 }
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{id:string}> }) {

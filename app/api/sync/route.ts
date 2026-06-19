@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
 
   const emails = await prisma.email.findMany({
     where: { isProcessed: false },
-    select: { id: true, subject: true, fromName: true, fromEmail: true, bodyText: true, bodyHtml: true },
+    select: { id: true, subject: true, fromName: true, fromEmail: true, toEmail: true, bodyText: true, bodyHtml: true },
     take: batchSize,
     orderBy: { receivedAt: "desc" },
   });
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
   for (const email of emails) {
     try {
-      await analyzeEmail(email.id, email.subject, email.fromName ?? "", email.fromEmail, email.bodyText, email.bodyHtml);
+      await analyzeEmail(email.id, email.subject, email.fromName ?? "", email.fromEmail, email.bodyText, email.bodyHtml, email.toEmail);
       processed++;
 
       // Pass 2: fire-and-forget deep analysis for PROMO, LIFT_NOTE, EDITORIAL

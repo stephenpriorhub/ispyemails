@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { logAILearning } from "./learnings";
+import { getAffiliateSeed } from "./affiliate-seeds";
 
 // ─── Pass 2 types ─────────────────────────────────────────────────────────────
 
@@ -474,13 +475,45 @@ function extractMastheadSignals(html: string): string {
   return signals.length > 0 ? signals.join(" | ") : "";
 }
 
+/** Upsert an affiliate-marketer publisher (e.g. MarketBeat) by name, forcing type + confirmed. */
+async function upsertAffiliatePublisher(name: string): Promise<string> {
+  const found = await prisma.publisher.findFirst({ where: { name: { equals: name, mode: "insensitive" } } });
+  if (found) {
+    if (found.type !== "AFFILIATE_MARKETER" || !found.isConfirmed) {
+      await prisma.publisher.update({ where: { id: found.id }, data: { type: "AFFILIATE_MARKETER", isConfirmed: true } });
+    }
+    return found.id;
+  }
+  const created = await prisma.publisher.create({
+    data: { name, type: "AFFILIATE_MARKETER", isConfirmed: true, domains: [], knownFromAddresses: [] },
+  });
+  return created.id;
+}
+
+/** Upsert the affiliate's marketing-file list by name, forcing category + publisher. */
+async function upsertAffiliateList(name: string, publisherId: string | null): Promise<string | null> {
+  const found = await prisma.list.findFirst({ where: { name: { equals: name, mode: "insensitive" } } });
+  if (found) {
+    const data: { publisherId?: string; category?: "MARKETING_FILE" } = {};
+    if (publisherId && found.publisherId !== publisherId) data.publisherId = publisherId;
+    if (found.category !== "MARKETING_FILE") data.category = "MARKETING_FILE";
+    if (Object.keys(data).length) await prisma.list.update({ where: { id: found.id }, data });
+    return found.id;
+  }
+  const created = await prisma.list.create({
+    data: { name, publisherId, category: "MARKETING_FILE", isIgnored: false, autoCreated: false },
+  });
+  return created.id;
+}
+
 export async function analyzeEmail(
   emailId: string,
   subject: string,
   fromName: string,
   fromEmail: string,
   bodyText: string | null,
-  bodyHtml: string | null
+  bodyHtml: string | null,
+  accountEmail?: string | null
 ): Promise<void> {
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -535,6 +568,14 @@ export async function analyzeEmail(
   const classificationHints: string[] = [];
   if (publisherHint) classificationHints.push(`PUBLISHER HINT: This email is from "${publisherHint}" — use this publisher name exactly.`);
   if (listHintFromTable) classificationHints.push(`LIST HINT: This email belongs to the newsletter "${listHintFromTable}" — use this list name exactly.`);
+
+  // ── Affiliate seed: this inbox only receives mail from an affiliate marketer ──
+  const affiliateSeed = getAffiliateSeed(accountEmail);
+  if (affiliateSeed) {
+    classificationHints.push(
+      `AFFILIATE SEND: This email was received via an affiliate-marketer seed inbox for "${affiliateSeed.publisher}". ${affiliateSeed.publisher} is a paid affiliate that mails OTHER publishers' offers to its list — it is NOT the originating publisher. Identify the PROMOTED editor/guru and product in "gurus" and "offer" (i.e. whose promo is being mailed), NOT ${affiliateSeed.publisher}. Do not list ${affiliateSeed.publisher} as a guru.`
+    );
+  }
 
   const prompt = `You are an expert analyst of financial newsletter emails in the direct-response publishing industry.
 Analyze this email and return ONLY valid JSON — no markdown, no explanation.
@@ -644,10 +685,16 @@ DEFINITIONS:
       }
     }
 
+    // ── Affiliate seed override: force publisher + list to the affiliate ──
+    const isAffiliateSeed = affiliateSeed !== null;
+
     // ── Publisher matching — must always resolve ──
     const emailDomain = (fromEmail.toLowerCase().split("@")[1] ?? "");
     let publisherId: string | null = null;
 
+    if (isAffiliateSeed) {
+      publisherId = await upsertAffiliatePublisher(affiliateSeed!.publisher);
+    } else {
     const exactMatch = publishers.find(p => p.knownFromAddresses.includes(fromEmail));
     if (exactMatch) {
       publisherId = exactMatch.id;
@@ -693,8 +740,13 @@ DEFINITIONS:
         }
       }
     }
+    } // end non-affiliate publisher resolution
 
     // ── List matching — must always resolve ──
+    let listId: string | null = null;
+    if (isAffiliateSeed) {
+      listId = await upsertAffiliateList(affiliateSeed!.list, publisherId);
+    } else {
     // Priority: pre-processor (subject/from-address) → AI result → masthead title tag → Claude fallback → from-name
     const preProcessorName = extractListFromSignals(subject, fromEmail);
     const mastheadTitle = mastheadContext.match(/Email title: "([^"]+)"/)?.[1]?.trim();
@@ -725,8 +777,6 @@ DEFINITIONS:
       console.log(`  ↳ last-resort list name derived: "${detectedListName}"`);
     }
 
-    let listId: string | null = null;
-
     if (detectedListName) {
       const detectedLower = detectedListName.toLowerCase();
       const existingList = lists.find(l =>
@@ -753,8 +803,11 @@ DEFINITIONS:
         }
       }
     }
+    } // end non-affiliate list resolution
 
     // ── Guru matching ──
+    // For affiliate seeds we still record WHO the promo is for (EmailGuru), but we
+    // never link bylined gurus to the affiliate's list (they aren't the affiliate's editors).
     const guruIds: string[] = [];
     for (const guruName of (result.gurus ?? [])) {
       if (ignoredGuruNames.has(guruName.toLowerCase())) continue;
@@ -773,8 +826,9 @@ DEFINITIONS:
         // Skip secondary voices from direct email tagging
         if (existing.isSecondaryVoice) continue;
         guruIds.push(existing.id);
-        // Auto-link guru to list — but SKIP if user has marked this association as ignored
-        if (listId) {
+        // Auto-link guru to list — but SKIP if user has marked this association as ignored,
+        // and SKIP entirely for affiliate seeds (bylined gurus don't belong to the affiliate)
+        if (listId && !isAffiliateSeed) {
           const linked = await prisma.guruList.findUnique({ where: { guruId_listId: { guruId: existing.id, listId } } });
           if (!linked) {
             await prisma.guruList.create({ data: { guruId: existing.id, listId, isPrimary: false } });
@@ -787,7 +841,7 @@ DEFINITIONS:
       } else {
         const newGuru = await prisma.guru.create({ data: { name: guruName } });
         guruIds.push(newGuru.id);
-        if (listId) {
+        if (listId && !isAffiliateSeed) {
           // Check if this new guru was pre-rejected for this list
           const rejected = await prisma.guruList.findUnique({ where: { guruId_listId: { guruId: newGuru.id, listId } } });
           if (!rejected?.isIgnored) {

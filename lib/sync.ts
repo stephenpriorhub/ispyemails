@@ -55,7 +55,7 @@ export async function syncGmailAccount(accountEmail: string): Promise<{ newEmail
       newEmails++;
       if (labelIds.includes("UNREAD")) await gmail.users.messages.modify({ userId: "me", id: msgId, requestBody: { removeLabelIds: ["UNREAD"] } });
       if (process.env.ANTHROPIC_API_KEY) {
-        await analyzeEmail(email.id, subject, from.name, from.email, text, html);
+        await analyzeEmail(email.id, subject, from.name, from.email, text, html, accountEmail);
         // Verify all required fields are set; if not, retry once before giving up
         const classified = await prisma.email.findUnique({
           where: { id: email.id },
@@ -68,7 +68,7 @@ export async function syncGmailAccount(accountEmail: string): Promise<{ newEmail
         if (!classified?.emailType || classified.emailType === "UNKNOWN") missingFields.push("emailType");
         if (missingFields.length > 0) {
           console.warn(`⚠ Missing after analysis [${email.id}]: ${missingFields.join(", ")} — retrying`);
-          await analyzeEmail(email.id, subject, from.name, from.email, text, html);
+          await analyzeEmail(email.id, subject, from.name, from.email, text, html, accountEmail);
           // Check again; if still missing, force-set safe defaults
           const recheck = await prisma.email.findUnique({
             where: { id: email.id },

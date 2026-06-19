@@ -16,6 +16,7 @@ export async function POST() {
       subject: true,
       fromName: true,
       fromEmail: true,
+      toEmail: true,
       bodyText: true,
       bodyHtml: true,
     },
@@ -33,7 +34,8 @@ export async function POST() {
         email.fromName ?? "",
         email.fromEmail,
         email.bodyText,
-        email.bodyHtml
+        email.bodyHtml,
+        email.toEmail
       );
       reclassified++;
     } catch (err) {
