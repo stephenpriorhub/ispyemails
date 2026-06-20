@@ -191,12 +191,12 @@ export default function EmailDetail({ email, publishers, allTags, allLists=[], a
         <div className="flex-1 overflow-auto">
           {view==="html"&&email.bodyHtml
             ? <iframe
-                srcDoc={`<base target="_blank">${email.bodyHtml}`}
+                srcDoc={`<base target="_blank"><style>html,body{background:#ffffff;color:#000000;margin:0;padding:16px;font-family:Arial,Helvetica,sans-serif;}img{max-width:100%;height:auto;}</style>${email.bodyHtml}`}
                 sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-                className="w-full h-full border-none"
+                className="w-full h-full border-none bg-white"
                 title="Email body"
               />
-            : <pre className="p-4 text-sm text-gray-300 whitespace-pre-wrap font-mono">{email.bodyText??email.snippet??"No content available"}</pre>}
+            : <pre className="p-4 text-sm text-black bg-white whitespace-pre-wrap font-mono min-h-full">{email.bodyText??email.snippet??"No content available"}</pre>}
         </div>
       </div>
       <div className="w-72 flex-shrink-0 overflow-y-auto bg-gray-900 space-y-4 p-4">
