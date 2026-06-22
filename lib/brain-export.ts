@@ -220,10 +220,24 @@ export async function exportLearningsToBrain(): Promise<BrainExportResult> {
 
     if (!brainRes.ok) {
       const err = await brainRes.text();
-      return { pushed: 0, skipped: learnings.length, errors: [`Brain vault error: ${err}`] };
+      // Non-2xx (e.g. 502 when brain-map's git push fails). Do NOT mark appended —
+      // the learnings stay eligible and will be retried on the next sync cycle.
+      return { pushed: 0, skipped: learnings.length, errors: [`Brain vault error (HTTP ${brainRes.status}): ${err}`] };
     }
 
     brainData = await brainRes.json();
+
+    // A 200 response is NOT sufficient on its own: brain-map can return HTTP 200
+    // with { ok: false } if the append/commit did not actually reach the vault.
+    // Only an explicit { ok: true } confirms the blocks landed. Anything else
+    // means the push failed silently — leave appendedToBrain=false so we retry.
+    if (!brainData || typeof brainData !== "object" || (brainData as { ok?: unknown }).ok !== true) {
+      return {
+        pushed: 0,
+        skipped: learnings.length,
+        errors: [`Brain vault reported failure (not { ok: true }): ${JSON.stringify(brainData)}`],
+      };
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { pushed: 0, skipped: learnings.length, errors: [`Network error reaching brain vault: ${msg}`] };
