@@ -82,7 +82,7 @@ export async function PATCH(req: NextRequest) {
   const remaining = await prisma.email.count({ where: { listId: null } });
   const emails = await prisma.email.findMany({
     where: { listId: null },
-    select: { id: true, subject: true, fromEmail: true, bodyHtml: true, publisherId: true },
+    select: { id: true, subject: true, fromEmail: true, fromName: true, bodyHtml: true, publisherId: true },
     take: batchSize,
     orderBy: { receivedAt: "desc" },
   });
@@ -94,7 +94,7 @@ export async function PATCH(req: NextRequest) {
 
   let processed = 0;
   for (const email of emails) {
-    const listName = await extractListForEmail(email.subject, email.fromEmail, email.bodyHtml);
+    const listName = await extractListForEmail(email.subject, email.fromEmail, email.bodyHtml, email.fromName ?? "");
     if (listName) {
       // Find or create the list
       const existing = existingLists.find(l => l.name.toLowerCase() === listName.toLowerCase());

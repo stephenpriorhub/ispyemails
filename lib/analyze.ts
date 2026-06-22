@@ -221,10 +221,28 @@ const KNOWN_ADDRESS_PUBLISHER_HINT: Record<string, string> = {
   "mb.paradigmpressgroup.com": "Paradigm Press",
 };
 
-function extractListFromSignals(subject: string, fromEmail: string): string | null {
+function extractListFromSignals(subject: string, fromEmail: string, fromName = ""): string | null {
   const subjectLower = subject.toLowerCase().trim();
+  const fromNameLower = fromName.toLowerCase();
 
-  // ── Hardcoded lookup — highest priority, catches ambiguous addresses ──
+  // ── Multi-list sender disambiguation — highest priority ──
+  // Some senders use ONE address for TWO distinct editorial lists. The CamelCase
+  // address derivation below can't tell them apart, so we route on the strongest
+  // deterministic signals (from-name, then subject) BEFORE anything else.
+  //
+  // Monument Traders Alliance "Trade of the Day" sends from a single address but
+  // runs a separate near-daily "Trade of the Day Wakeup Watchlist" product. The
+  // reliable discriminator is the from-name ("Trade of the Day Wake-Up Watchlist"
+  // vs plain "Trade of the Day"); the subject occasionally carries it too.
+  if (fromEmail.toLowerCase() === "tradeoftheday@mb.mtatradeoftheday.com") {
+    const watchlistSignal = /wake[\s-]?up|watchlist/i;
+    if (watchlistSignal.test(fromNameLower) || watchlistSignal.test(subjectLower)) {
+      return "Trade of the Day Wakeup Watchlist";
+    }
+    return "Trade of the Day";
+  }
+
+  // ── Hardcoded lookup — catches ambiguous addresses ──
   const knownList = KNOWN_ADDRESS_TO_LIST[fromEmail.toLowerCase()];
   if (knownList) return knownList;
 
@@ -386,10 +404,11 @@ Reply with ONLY the name (e.g. "Daily Reckoning"). If you cannot determine it, r
 export async function extractListForEmail(
   subject: string,
   fromEmail: string,
-  bodyHtml: string | null
+  bodyHtml: string | null,
+  fromName = ""
 ): Promise<string | null> {
-  // 1. Pre-processor (subject pattern + from-address)
-  const fromPreProcessor = extractListFromSignals(subject, fromEmail);
+  // 1. Pre-processor (subject pattern + from-address + from-name)
+  const fromPreProcessor = extractListFromSignals(subject, fromEmail, fromName);
   if (fromPreProcessor) return fromPreProcessor;
 
   // 2. HTML <title> tag
@@ -643,7 +662,7 @@ DEFINITIONS:
 
     // ── Fallback: if AI returned no list, try extractListForEmail (pre-processor + HTML + mini-Claude) ──
     if (!result.list || result.list.trim() === "") {
-      const fallbackList = await extractListForEmail(subject, fromEmail, bodyHtml);
+      const fallbackList = await extractListForEmail(subject, fromEmail, bodyHtml, fromName);
       if (fallbackList) {
         console.log(`  ↳ fallback list extraction: "${fallbackList}"`);
         result.list = fallbackList;
@@ -748,7 +767,7 @@ DEFINITIONS:
       listId = await upsertAffiliateList(affiliateSeed!.list, publisherId);
     } else {
     // Priority: pre-processor (subject/from-address) → AI result → masthead title tag → Claude fallback → from-name
-    const preProcessorName = extractListFromSignals(subject, fromEmail);
+    const preProcessorName = extractListFromSignals(subject, fromEmail, fromName);
     const mastheadTitle = mastheadContext.match(/Email title: "([^"]+)"/)?.[1]?.trim();
     let detectedListName: string | null = preProcessorName ?? result.list ?? mastheadTitle ?? null;
 
@@ -778,10 +797,21 @@ DEFINITIONS:
     }
 
     if (detectedListName) {
+      // Canonicalize for matching: lowercase, strip leading "The ", strip trailing
+      // punctuation, collapse whitespace. Prevents near-duplicate lists like
+      // "The Rude Awakening" vs "Rude Awakening" or "Trade of the Day." variants.
+      const canon = (s: string) =>
+        s.toLowerCase().trim()
+          .replace(/^the\s+/, "")
+          .replace(/[\s.,!?:;'"-]+$/, "")
+          .replace(/\s+/g, " ")
+          .trim();
       const detectedLower = detectedListName.toLowerCase();
+      const detectedCanon = canon(detectedListName);
       const existingList = lists.find(l =>
         l.name.toLowerCase() === detectedLower ||
-        l.synonyms.some(s => s.toLowerCase() === detectedLower)
+        canon(l.name) === detectedCanon ||
+        l.synonyms.some(s => s.toLowerCase() === detectedLower || canon(s) === detectedCanon)
       );
       if (existingList) {
         listId = existingList.id;
