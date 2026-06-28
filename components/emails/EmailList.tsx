@@ -77,7 +77,7 @@ export default function EmailList({ emails,total,page,pages,publishers,topics,li
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-gray-800 bg-gray-900 space-y-3">
+      <div className="p-4 border-b border-gray-800 bg-gray-900 space-y-3 flex-shrink-0">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold text-white">Emails <span className="text-gray-500 text-sm font-normal ml-1">{total.toLocaleString()} total</span></h1>
         </div>
@@ -97,10 +97,10 @@ export default function EmailList({ emails,total,page,pages,publishers,topics,li
 
         {/* Filters row */}
         <div className="flex items-center gap-2 flex-wrap">
-          <form onSubmit={handleSearch}>
+          <form onSubmit={handleSearch} className="w-full sm:w-auto">
             <div className="relative">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500"/>
-              <input name="q" defaultValue={filters.search??""} placeholder="Search…" className="pl-7 pr-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500 w-48"/>
+              <input name="q" defaultValue={filters.search??""} placeholder="Search…" className="pl-7 pr-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500 w-full sm:w-48"/>
             </div>
           </form>
 
@@ -141,8 +141,8 @@ export default function EmailList({ emails,total,page,pages,publishers,topics,li
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-y-auto">
-        <table className="w-full text-sm">
+      <div className="flex-1 overflow-auto">
+        <table className="w-full text-sm min-w-[720px]">
           <thead className="sticky top-0 bg-gray-900 border-b border-gray-800">
             <tr>
               <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium w-28">Gmail Placement</th>

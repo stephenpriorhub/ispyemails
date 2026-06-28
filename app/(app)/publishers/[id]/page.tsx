@@ -20,21 +20,21 @@ export default async function PublisherDetailPage({ params }: { params: Promise<
   const topTopicsNamed = topTopics.map(t=>({count:t._count,name:topicDetails.find(td=>td.id===t.topicId)?.name??"unknown"}));
   const avgPerWeek = Math.round(publisher._count.emails/Math.max(1,Math.ceil((Date.now()-new Date(publisher.createdAt).getTime())/(7*24*60*60*1000))));
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       <div>
         <Link href="/publishers" className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 mb-3"><ArrowLeft className="w-3.5 h-3.5"/>Publishers</Link>
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
           <div><h1 className="text-2xl font-bold text-white">{publisher.name}</h1>{publisher.website&&<a href={publisher.website} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline mt-1 block">{publisher.website}</a>}</div>
           <Link href={`/emails?publisher=${id}`} className="px-3 py-1.5 bg-amber-500/10 text-amber-400 text-sm rounded hover:bg-amber-500/20 transition-colors">View All Emails →</Link>
         </div>
       </div>
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[{label:"Total",value:publisher._count.emails,icon:Mail},{label:"Last 7d",value:last7d,icon:Calendar},{label:"Last 30d",value:last30d,icon:TrendingUp},{label:"Avg/Week",value:avgPerWeek,icon:TrendingUp}].map(({label,value,icon:Icon})=>(
           <div key={label} className="bg-gray-900 border border-gray-800 rounded-lg p-4"><div className="flex items-center gap-2 text-gray-400 text-xs mb-2"><Icon className="w-3.5 h-3.5"/>{label}</div><div className="text-2xl font-bold text-white">{value}</div></div>
         ))}
       </div>
-      <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-2 bg-gray-900 border border-gray-800 rounded-lg">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-lg">
           <div className="p-4 border-b border-gray-800"><h2 className="font-semibold text-white text-sm">Recent Emails</h2></div>
           <div className="divide-y divide-gray-800">
             {publisher.emails.map(email=>(

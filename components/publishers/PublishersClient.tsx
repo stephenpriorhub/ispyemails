@@ -103,9 +103,9 @@ export default function PublishersClient({ publishers: initial, weekMap, isAdmin
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Users className="w-6 h-6 text-amber-400" />
@@ -116,9 +116,9 @@ export default function PublishersClient({ publishers: initial, weekMap, isAdmin
         {isAdmin && (
           <button
             onClick={() => setShowAdd(!showAdd)}
-            className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-sm font-medium rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-sm font-medium rounded-lg transition-colors flex-shrink-0"
           >
-            <Plus className="w-4 h-4" /> Add Publisher
+            <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Add Publisher</span><span className="sm:hidden">Add</span>
           </button>
         )}
       </div>
@@ -127,7 +127,7 @@ export default function PublishersClient({ publishers: initial, weekMap, isAdmin
       {showAdd && (
         <form onSubmit={addPublisher} className="bg-gray-900 border border-amber-500/30 rounded-lg p-4 mb-6 space-y-3">
           <h2 className="text-sm font-semibold text-amber-400">New Publisher</h2>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <input value={addForm.name} onChange={(e) => setAddForm({ ...addForm, name: e.target.value })} placeholder="Name (e.g. Weiss Ratings)" className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500" />
             <input value={addForm.domains} onChange={(e) => setAddForm({ ...addForm, domains: e.target.value })} placeholder="Domains: weissratings.com, weiss.com" className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500" />
             <input value={addForm.website} onChange={(e) => setAddForm({ ...addForm, website: e.target.value })} placeholder="Website (optional)" className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500" />
@@ -186,7 +186,7 @@ export default function PublishersClient({ publishers: initial, weekMap, isAdmin
             {/* Edit row */}
             {editing === pub.id && (
               <div className="px-4 py-3 space-y-3 bg-gray-800/40">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-gray-400 mb-1 block">Name</label>
                     <input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:border-amber-500" />

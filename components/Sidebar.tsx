@@ -14,9 +14,11 @@ const adminNav = [
 interface Props {
   user?: { id: string; name: string | null; email: string; role: string } | null;
   isAdmin?: boolean;
+  mobileOpen?: boolean;
+  onClose?: () => void;
 }
 
-export default function Sidebar({ user, isAdmin = false }: Props) {
+export default function Sidebar({ user, isAdmin = false, mobileOpen = false, onClose }: Props) {
   const pathname = usePathname();
   const [syncing, setSyncing] = useState(false);
 
@@ -40,7 +42,12 @@ export default function Sidebar({ user, isAdmin = false }: Props) {
   const allNav = isAdmin ? [...coreNav, ...adminNav] : coreNav;
 
   return (
-    <aside className="w-56 flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col">
+    <>
+      {/* Mobile backdrop */}
+      {mobileOpen && (
+        <div className="fixed inset-0 bg-black/60 z-30 md:hidden" onClick={onClose} aria-hidden />
+      )}
+    <aside className={`w-56 flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col fixed inset-y-0 left-0 z-40 transform transition-transform md:static md:translate-x-0 ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}>
       {/* Logo */}
       <div className="p-4 border-b border-gray-800">
         <div className="flex items-center gap-2">
@@ -57,6 +64,7 @@ export default function Sidebar({ user, isAdmin = false }: Props) {
             <Link
               key={href}
               href={href}
+              onClick={onClose}
               className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
                 active
                   ? "bg-amber-500/10 text-amber-400 font-medium"
@@ -104,5 +112,6 @@ export default function Sidebar({ user, isAdmin = false }: Props) {
         </div>
       )}
     </aside>
+    </>
   );
 }

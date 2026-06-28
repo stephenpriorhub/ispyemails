@@ -12,7 +12,7 @@ export default function SearchPage() {
     setResults(data.emails); setTotal(data.total); setLoading(false);
   }
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <div className="mb-6"><h1 className="text-2xl font-bold text-white flex items-center gap-2"><Search className="w-6 h-6 text-amber-400"/>Search</h1><p className="text-gray-400 text-sm mt-1">Search subjects, body content, topics, and senders.</p></div>
       <form onSubmit={doSearch} className="mb-6">
         <div className="flex gap-3">

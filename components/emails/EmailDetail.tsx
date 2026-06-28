@@ -173,13 +173,13 @@ export default function EmailDetail({ email, publishers, allTags, allLists=[], a
   async function reanalyze() { setAnalyzing(true); await fetch(`/api/emails/${email.id}`,{method:"POST"}); setAnalyzing(false); window.location.reload(); }
   async function ignoreTopic(topicId:string) { await fetch(`/api/topics/${topicId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({isIgnored:true})}); window.location.reload(); }
   return (
-    <div className="flex h-full">
-      <div className="flex-1 flex flex-col border-r border-gray-800">
+    <div className="flex flex-col md:flex-row h-full">
+      <div className="flex-1 flex flex-col border-b md:border-b-0 md:border-r border-gray-800 min-h-[60vh] md:min-h-0">
         <div className="p-4 border-b border-gray-800">
           <Link href="/emails" className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 mb-3"><ArrowLeft className="w-3.5 h-3.5"/>Back to emails</Link>
           <h1 className="text-lg font-semibold text-white leading-tight">{email.subject}</h1>
-          <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
-            <span>{email.fromName?`${email.fromName} <${email.fromEmail}>`:email.fromEmail}</span><span>·</span>
+          <div className="flex items-center gap-3 mt-2 text-xs text-gray-400 flex-wrap">
+            <span className="break-all">{email.fromName?`${email.fromName} <${email.fromEmail}>`:email.fromEmail}</span><span>·</span>
             <span>{new Date(email.receivedAt).toLocaleString()}</span>
             <span className={`inline-flex items-center px-1.5 py-0.5 rounded border text-xs font-medium ${pBadge[email.inboxPlacement]??pBadge.UNKNOWN}`}>{email.inboxPlacement}</span>
           </div>
@@ -199,7 +199,7 @@ export default function EmailDetail({ email, publishers, allTags, allLists=[], a
             : <pre className="p-4 text-sm text-black bg-white whitespace-pre-wrap font-mono min-h-full">{email.bodyText??email.snippet??"No content available"}</pre>}
         </div>
       </div>
-      <div className="w-72 flex-shrink-0 overflow-y-auto bg-gray-900 space-y-4 p-4">
+      <div className="w-full md:w-72 flex-shrink-0 overflow-y-auto bg-gray-900 space-y-4 p-4">
         {/* AI Summary — always visible */}
         {email.aiSummary&&<div className="bg-gray-800 rounded-lg p-3"><p className="text-xs text-gray-500 mb-1">AI Summary</p><p className="text-xs text-gray-300 leading-relaxed">{email.aiSummary}</p></div>}
         {email.offer&&(email.offer.url||email.offer.promise)&&<div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3"><p className="text-xs text-amber-400 font-medium mb-2">Detected Offer</p>{email.offer.promise&&<p className="text-xs text-gray-300 leading-relaxed mb-2 italic">&quot;{email.offer.promise}&quot;</p>}{email.offer.ticker&&<p className="text-xs text-amber-400 mb-1">Ticker: ${email.offer.ticker}</p>}{email.offer.url&&<a href={email.offer.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-blue-400 hover:underline truncate"><ExternalLink className="w-3 h-3 flex-shrink-0"/><span className="truncate">{email.offer.url}</span></a>}</div>}

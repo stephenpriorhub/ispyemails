@@ -122,7 +122,7 @@ export default async function DashboardPage({
   ];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-white">Daily Briefing</h1>
@@ -138,7 +138,7 @@ export default async function DashboardPage({
       )}
 
       {/* Stat cards — always current, not affected by date navigator */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map(({ label, value, icon: Icon }) => (
           <div key={label} className="bg-gray-900 border border-gray-800 rounded-lg p-4">
             <div className="flex items-center gap-2 text-gray-400 text-xs mb-2"><Icon className="w-3.5 h-3.5" />{label}</div>
@@ -148,14 +148,14 @@ export default async function DashboardPage({
       </div>
 
       {/* Date navigator — below stats bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <p className="text-gray-300 text-sm font-medium">
             {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
             {isToday && <span className="ml-2 text-xs text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">Today</span>}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Link href={`/?date=${prevDay.toISOString().split("T")[0]}`} className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm rounded transition-colors">← Prev</Link>
           <DashboardClient currentDate={dayStart.toISOString().split("T")[0]} />
           {!isToday && (
@@ -165,9 +165,9 @@ export default async function DashboardPage({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Email list */}
-        <div className="col-span-2 bg-gray-900 border border-gray-800 rounded-lg">
+        <div className="lg:col-span-2 bg-gray-900 border border-gray-800 rounded-lg">
           <div className="p-4 border-b border-gray-800 flex items-center justify-between">
             <h2 className="font-semibold text-white text-sm">
               {isToday ? "Today's Emails" : `Emails on ${selectedDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}

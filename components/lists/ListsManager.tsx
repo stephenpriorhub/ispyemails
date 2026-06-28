@@ -87,21 +87,21 @@ export default function ListsManager({ lists: initial, publishers, primaryGurus 
   const ignored = lists.filter(l => l.isIgnored);
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 sm:p-6">
+      <div className="flex items-center justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2"><BookOpen className="w-6 h-6 text-amber-400" />Lists</h1>
           <p className="text-gray-400 text-sm mt-1">Newsletters and publications — each belongs to a Publisher</p>
         </div>
         {isAdmin && (
-          <button onClick={() => setShowAdd(!showAdd)} className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-sm font-medium rounded-lg transition-colors">
-            <Plus className="w-4 h-4" />Add List
+          <button onClick={() => setShowAdd(!showAdd)} className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-sm font-medium rounded-lg transition-colors flex-shrink-0">
+            <Plus className="w-4 h-4" /><span className="hidden sm:inline">Add List</span><span className="sm:hidden">Add</span>
           </button>
         )}
       </div>
 
       {/* Filter bar */}
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
         <select value={filterPublisher} onChange={e => setFilterPublisher(e.target.value)} className="py-1 px-2 bg-gray-800 border border-gray-700 rounded text-sm text-gray-300 focus:outline-none focus:border-amber-500">
           <option value="all">All publishers</option>
           {publishers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -121,8 +121,8 @@ export default function ListsManager({ lists: initial, publishers, primaryGurus 
 
       {showAdd && (
         <form onSubmit={addList} className="bg-gray-900 border border-amber-500/30 rounded-lg p-4 mb-6 space-y-3">
-          <div className="grid grid-cols-4 gap-3">
-            <input value={addForm.name} onChange={e => setAddForm({ ...addForm, name: e.target.value })} placeholder="Newsletter name" className="col-span-2 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500" />
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <input value={addForm.name} onChange={e => setAddForm({ ...addForm, name: e.target.value })} placeholder="Newsletter name" className="sm:col-span-2 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500" />
             <select value={addForm.category} onChange={e => setAddForm({ ...addForm, category: e.target.value })} className="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-gray-300 focus:outline-none focus:border-amber-500">
               {CATEGORIES.map(c => <option key={c} value={c}>{catLabel(c)}</option>)}
             </select>
@@ -173,8 +173,8 @@ export default function ListsManager({ lists: initial, publishers, primaryGurus 
 
             {editing === list.id && (
               <div className="px-4 py-3 bg-gray-800/40 space-y-3">
-                <div className="grid grid-cols-4 gap-3">
-                  <input value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} className="col-span-2 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:border-amber-500" />
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <input value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} className="sm:col-span-2 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white focus:outline-none focus:border-amber-500" />
                   <select value={editForm.category} onChange={e => setEditForm({ ...editForm, category: e.target.value })} className="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-gray-300 focus:outline-none focus:border-amber-500">
                     {CATEGORIES.map(c => <option key={c} value={c}>{catLabel(c)}</option>)}
                   </select>
