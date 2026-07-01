@@ -34,3 +34,26 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Environment Variables
+
+See [`.env.example`](./.env.example) for the full list. Set these on the Railway `ispy-emails` service.
+
+### Brain vault integration (App-to-Brain Learning Loop)
+
+iSpy teaches the brain on a **batched nightly / on-demand** cadence (never per-email).
+The sync (`lib/brain-export.ts`, triggered by `GET /api/cron/brain-sync` and
+`POST /api/learnings/export`) POSTs to the shared Brain API in `brain-map`:
+
+- `HUB_API_TOKEN` — shared token authenticating iSpy → Brain API (`x-hub-token`). Same value as brain-map.
+- `BRAIN_API_URL` — base URL of the Brain API. Defaults to `https://brain.oxfordhub.app`.
+  The legacy name `BRAIN_URL` is still read as a fallback.
+- `CRON_SECRET` — protects the cron endpoints (existing).
+
+Each nightly run:
+1. pushes the back-compat `{ blocks }` payload (publishers / lists / gurus / general), then
+2. posts one batched `{ kind: "guru-live-intel", guru, items }` per guru — appended
+   append-only to the `<!-- ispy:start/end -->` block of `Resources/Experts/<Guru>.md`.
+
+Writes are **data only** (Brain API → vault git commit, surfaced by brain-map at runtime),
+so ongoing learning requires **no redeploy** — only the one-time rollout of the integration code does.

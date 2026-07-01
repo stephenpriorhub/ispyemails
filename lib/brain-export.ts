@@ -8,8 +8,12 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { toGuruLiveIntelItem } from "@/lib/guru-live-intel";
 
-const BRAIN_URL = process.env.BRAIN_URL ?? "https://brain.oxfordhub.app";
+// Brain API base URL. Prefer BRAIN_API_URL (the canonical name in REGISTRY.md);
+// fall back to the legacy BRAIN_URL, then the known default. Never hardcode.
+const BRAIN_URL =
+  process.env.BRAIN_API_URL ?? process.env.BRAIN_URL ?? "https://brain.oxfordhub.app";
 const HUB_API_TOKEN = process.env.HUB_API_TOKEN ?? "";
 
 /** Minimum confidence score for auto-approval (no human validation needed) */
@@ -58,7 +62,9 @@ async function fetchEligibleLearnings() {
       guru: { select: { name: true, publisher: { select: { name: true } } } },
       publisher: { select: { name: true } },
       list: { select: { name: true, publisher: { select: { name: true } } } },
-      email: { select: { subject: true, receivedAt: true } },
+      // gmailMessageId + emailType feed the per-guru "currently talking about"
+      // live-intel items (sourceEmailId + tactic) sent to the Brain API.
+      email: { select: { subject: true, receivedAt: true, gmailMessageId: true, emailType: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -146,6 +152,66 @@ function groupLearnings(learnings: FetchedLearning[]): GroupedLearnings {
   }
 
   return { byGuru, byPublisher, byList, general };
+}
+
+// ─── Per-guru live-intel push (Brain API `guru-live-intel`) ───────────────────
+//
+// The Learning → GuruLiveIntelItem mapping lives in lib/guru-live-intel.ts
+// (pure, Prisma-free, unit-tested). Here we only batch + POST it.
+
+/**
+ * Push per-guru live intel to the Brain API, ONE batched `guru-live-intel` POST per guru.
+ *
+ * Autonomy: operates only on the already-gated `byGuru` groups produced upstream by
+ * fetchEligibleLearnings() (VALIDATED or auto-approved-by-corroboration) — it adds NO
+ * human-approval step and applies no new gate of its own.
+ *
+ * Cadence: called once per nightly/on-demand export run, aggregated per guru — never per-email.
+ *
+ * Graceful failure: a Brain API error for one guru is collected into `errors` and the loop
+ * continues; it NEVER throws, so it cannot crash the surrounding sync. It also does not affect
+ * whether learnings are marked appendedToBrain (the back-compat `blocks` push owns that).
+ */
+async function pushGuruLiveIntel(
+  byGuru: GroupedLearnings["byGuru"],
+): Promise<{ posted: number; errors: string[] }> {
+  const errors: string[] = [];
+  let posted = 0;
+
+  for (const { name, publisherName, items } of Object.values(byGuru)) {
+    const guru = name?.trim();
+    if (!guru) continue;
+
+    const intelItems = items.map(l => toGuruLiveIntelItem(l, publisherName));
+    if (!intelItems.length) continue;
+
+    try {
+      const res = await fetch(`${BRAIN_URL}/api/intelligence`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-hub-token": HUB_API_TOKEN },
+        body: JSON.stringify({ kind: "guru-live-intel", guru, items: intelItems }),
+      });
+
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        errors.push(`guru-live-intel for "${guru}" failed (HTTP ${res.status}): ${body}`);
+        continue;
+      }
+
+      const data = (await res.json().catch(() => null)) as { ok?: unknown } | null;
+      if (!data || data.ok !== true) {
+        errors.push(`guru-live-intel for "${guru}" reported failure (not { ok: true }): ${JSON.stringify(data)}`);
+        continue;
+      }
+
+      posted++;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`guru-live-intel for "${guru}" network error: ${msg}`);
+    }
+  }
+
+  return { posted, errors };
 }
 
 // ─── Core export function ─────────────────────────────────────────────────────
@@ -252,7 +318,22 @@ export async function exportLearningsToBrain(): Promise<BrainExportResult> {
 
   console.log(`[BrainExport] Pushed ${allIds.length} learnings to brain vault`, brainData);
 
-  return { pushed: allIds.length, skipped: 0, errors: [] };
+  // ── Per-guru live-intel (Brain API `guru-live-intel`) ──────────────────────
+  // Batched: one POST per guru, aggregated from this same run's gated byGuru groups.
+  // Best-effort/append-only: failures here do NOT unwind the successful blocks push or
+  // the appendedToBrain marking above — they are surfaced as non-fatal errors so the
+  // overall nightly sync still reports success. The per-guru bullets are idempotent-safe
+  // to re-attempt on a future run only via new learnings; we intentionally do not roll
+  // back marking, since the canonical `blocks` sync already landed.
+  const guruIntel = await pushGuruLiveIntel(byGuru);
+  if (guruIntel.posted > 0) {
+    console.log(`[BrainExport] Posted guru-live-intel for ${guruIntel.posted} guru(s)`);
+  }
+  if (guruIntel.errors.length > 0) {
+    console.warn(`[BrainExport] guru-live-intel had ${guruIntel.errors.length} error(s):`, guruIntel.errors);
+  }
+
+  return { pushed: allIds.length, skipped: 0, errors: guruIntel.errors };
 }
 
 // ─── For the GET display endpoint (unchanged from original) ──────────────────
@@ -270,7 +351,9 @@ export async function fetchAllValidatedLearnings() {
       guru: { select: { name: true, publisher: { select: { name: true } } } },
       publisher: { select: { name: true } },
       list: { select: { name: true, publisher: { select: { name: true } } } },
-      email: { select: { subject: true, receivedAt: true } },
+      // Keep the email select identical to fetchEligibleLearnings so both feed the
+      // shared groupLearnings() with the same FetchedLearning shape.
+      email: { select: { subject: true, receivedAt: true, gmailMessageId: true, emailType: true } },
     },
     orderBy: { createdAt: "desc" },
   });
