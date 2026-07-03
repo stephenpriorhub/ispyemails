@@ -6,6 +6,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id: guruId } = await params;
   const { listId, isPrimary } = await req.json();
 
+  // Enforce the publisher rule: a guru may only be a member of lists owned by his
+  // primary publisher OR any of his (manually set) secondary publishers. A link to
+  // any other publisher's list would mean he's just a guest / being promoted —
+  // that's a mention, not a membership.
+  const [guru, list] = await Promise.all([
+    prisma.guru.findUnique({
+      where: { id: guruId },
+      select: { publisherId: true, publisher: { select: { name: true } }, secondaryPublishers: { select: { publisherId: true } } },
+    }),
+    prisma.list.findUnique({ where: { id: listId }, select: { publisherId: true, publisher: { select: { name: true } } } }),
+  ]);
+  const allowedPublisherIds = [guru?.publisherId, ...(guru?.secondaryPublishers.map(sp => sp.publisherId) ?? [])].filter((x): x is string => !!x);
+  if (allowedPublisherIds.length && list?.publisherId && !allowedPublisherIds.includes(list.publisherId)) {
+    return NextResponse.json(
+      {
+        error: `This guru is assigned to ${guru?.publisher?.name ?? "another publisher"} and can only be a member of that publication's lists (or a publisher he's manually tagged as a secondary of). This list belongs to ${list.publisher?.name ?? "a different publisher"} — if the guru only appears there as a guest or promotion, that's a mention, not a membership. To make this a real membership, add that publisher as a secondary publisher on the guru first.`,
+      },
+      { status: 409 },
+    );
+  }
+
   const existing = await prisma.guruList.findUnique({ where: { guruId_listId: { guruId, listId } } });
   if (existing) {
     // Restore if was ignored

@@ -525,6 +525,29 @@ async function upsertAffiliateList(name: string, publisherId: string | null): Pr
   return created.id;
 }
 
+/**
+ * Guardrail for guru → list membership.
+ *
+ * A guru who is ASSIGNED to a publisher belongs only to that publisher's lists —
+ * plus any publishers he's been MANUALLY tagged as a secondary of (a guru can be
+ * published by more than one house). If he shows up in some OTHER publisher's
+ * e-letter he is a guest / is simply being promoted — we still record the mention
+ * (EmailGuru) but must NOT create a GuruList membership. (e.g. Keith Kaplan is
+ * assigned to TradeSmith, so a mention inside MTA's "Trade of the Day" is
+ * promotion, not membership.)
+ *
+ * `allowedPublisherIds` = the guru's primary publisher + any secondary publishers.
+ * Returns true when linking is allowed:
+ *  - unassigned guru            → link freely (not yet tied to any publisher)
+ *  - list publisher unknown     → allow (can't prove a cross-publisher violation)
+ *  - list publisher is allowed  → allow (same publication, primary or secondary)
+ */
+function guruMayJoinList(allowedPublisherIds: string[], listPublisherId: string | null): boolean {
+  if (allowedPublisherIds.length === 0) return true;
+  if (!listPublisherId) return true;
+  return allowedPublisherIds.includes(listPublisherId);
+}
+
 export async function analyzeEmail(
   emailId: string,
   subject: string,
@@ -539,8 +562,8 @@ export async function analyzeEmail(
 
   const [publishers, lists, gurus, existingTopics, ignoredTopics, ignoredGurus, secondaryVoices, validatedLearnings] = await Promise.all([
     prisma.publisher.findMany({ select: { id: true, name: true, domains: true, knownFromAddresses: true, type: true } }),
-    prisma.list.findMany({ where: { isIgnored: false }, select: { id: true, name: true, publisherId: true, synonyms: true } }),
-    prisma.guru.findMany({ where: { isIgnored: false }, select: { id: true, name: true, isSecondaryVoice: true } }),
+    prisma.list.findMany({ where: { isIgnored: false }, select: { id: true, name: true, publisherId: true, synonyms: true, category: true } }),
+    prisma.guru.findMany({ where: { isIgnored: false }, select: { id: true, name: true, isSecondaryVoice: true, publisherId: true, secondaryPublishers: { select: { publisherId: true } } } }),
     prisma.topic.findMany({ where: { isIgnored: false }, select: { name: true, synonyms: true } }),
     prisma.topic.findMany({ where: { isIgnored: true }, select: { name: true, synonyms: true } }),
     prisma.guru.findMany({ where: { isIgnored: true }, select: { name: true } }),
@@ -763,8 +786,12 @@ DEFINITIONS:
 
     // ── List matching — must always resolve ──
     let listId: string | null = null;
+    let listPublisherId: string | null = null; // the publisher that OWNS the resolved list
+    let listCategory: string | null = null;     // FREE_EDITORIAL | PAID_EDITORIAL | HOTLIST | MARKETING_FILE
     if (isAffiliateSeed) {
       listId = await upsertAffiliateList(affiliateSeed!.list, publisherId);
+      listPublisherId = publisherId;
+      listCategory = "MARKETING_FILE";
     } else {
     // Priority: pre-processor (subject/from-address) → AI result → masthead title tag → Claude fallback → from-name
     const preProcessorName = extractListFromSignals(subject, fromEmail, fromName);
@@ -815,8 +842,12 @@ DEFINITIONS:
       );
       if (existingList) {
         listId = existingList.id;
+        listCategory = existingList.category;
         if (!existingList.publisherId && publisherId) {
           await prisma.list.update({ where: { id: listId }, data: { publisherId } });
+          listPublisherId = publisherId;
+        } else {
+          listPublisherId = existingList.publisherId;
         }
       } else {
         // Create it — mark autoCreated so the UI can indicate it was AI-generated
@@ -826,20 +857,29 @@ DEFINITIONS:
             data: { name: detectedListName, publisherId, isIgnored: false, autoCreated: wasAutoCreated },
           });
           listId = newList.id;
+          listPublisherId = publisherId;
+          listCategory = newList.category;
         } catch {
           // Name may already exist (race condition) — try to find it
           const found = await prisma.list.findFirst({ where: { name: { equals: detectedListName, mode: "insensitive" } } });
-          if (found) listId = found.id;
+          if (found) { listId = found.id; listPublisherId = found.publisherId; listCategory = found.category; }
         }
       }
     }
     } // end non-affiliate list resolution
 
     // ── Guru matching ──
-    // For affiliate seeds we still record WHO the promo is for (EmailGuru), but we
-    // never link bylined gurus to the affiliate's list (they aren't the affiliate's editors).
+    // Marketing files (MarketBeat & other affiliate marketers) recycle dozens of
+    // other publishers' editor names as promo bait. We do NOT treat those as gurus:
+    // no guru records, no mentions, no memberships are pulled from a marketing-file
+    // publication. A guru only enters iSpy via a real editorial publication.
+    const resolvedPublisherType = publishers.find(p => p.id === publisherId)?.type;
+    const isMarketingFile =
+      isAffiliateSeed ||
+      listCategory === "MARKETING_FILE" ||
+      resolvedPublisherType === "AFFILIATE_MARKETER";
     const guruIds: string[] = [];
-    for (const guruName of (result.gurus ?? [])) {
+    for (const guruName of (isMarketingFile ? [] : (result.gurus ?? []))) {
       if (ignoredGuruNames.has(guruName.toLowerCase())) continue;
       const existing = gurus.find(g => g.name.toLowerCase() === guruName.toLowerCase());
 
@@ -857,8 +897,11 @@ DEFINITIONS:
         if (existing.isSecondaryVoice) continue;
         guruIds.push(existing.id);
         // Auto-link guru to list — but SKIP if user has marked this association as ignored,
-        // and SKIP entirely for affiliate seeds (bylined gurus don't belong to the affiliate)
-        if (listId && !isAffiliateSeed) {
+        // SKIP entirely for affiliate seeds (bylined gurus don't belong to the affiliate),
+        // and SKIP when the guru is assigned to a DIFFERENT publisher than this list's
+        // owner (he's a guest / being promoted here, not a member — see guruMayJoinList).
+        const existingAllowedPublishers = [existing.publisherId, ...existing.secondaryPublishers.map(sp => sp.publisherId)].filter((x): x is string => !!x);
+        if (listId && !isAffiliateSeed && guruMayJoinList(existingAllowedPublishers, listPublisherId)) {
           const linked = await prisma.guruList.findUnique({ where: { guruId_listId: { guruId: existing.id, listId } } });
           if (!linked) {
             await prisma.guruList.create({ data: { guruId: existing.id, listId, isPrimary: false } });

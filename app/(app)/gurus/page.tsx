@@ -13,6 +13,7 @@ export default async function GurusPage() {
         lists: { include: { list: { select: { id: true, name: true, publisher: { select: { id: true, name: true } } } } } },
         primaryGurus: { include: { primaryGuru: { select: { id: true, name: true } } } },
         secondaryVoices: { include: { secondaryVoice: { select: { id: true, name: true } } } },
+        secondaryPublishers: { include: { publisher: { select: { id: true, name: true } } } },
         _count: { select: { emails: true } },
       },
       orderBy: { name: "asc" },
