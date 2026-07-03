@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Mail, Users, TrendingUp, Inbox } from "lucide-react";
 import DashboardClient from "@/components/dashboard/DashboardClient";
+import TopicTrendChart from "@/components/dashboard/TopicTrendChart";
 import LocalTime from "@/components/dashboard/LocalTime";
 import { Bot, UserCog } from "lucide-react";
 
@@ -77,6 +78,26 @@ export default async function DashboardPage({
     name: topicDetails.find(td => td.id === t.topicId)?.name ?? "unknown",
   }));
 
+  // Trending investment topics — count of emails per PRIMARY topic across the
+  // last 90 days; the client toggles 7 / 30 / 90 day windows over this data.
+  const d90 = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  const trendRows = await prisma.emailTopic.findMany({
+    where: { email: { receivedAt: { gte: d90 } }, topic: { isSecondary: false, isIgnored: false } },
+    select: { topic: { select: { name: true } }, email: { select: { receivedAt: true } } },
+  });
+  const nowMs = Date.now();
+  const topFor = (days: number) => {
+    const cutoff = nowMs - days * 24 * 60 * 60 * 1000;
+    const counts = new Map<string, number>();
+    for (const r of trendRows) {
+      if (new Date(r.email.receivedAt).getTime() >= cutoff) {
+        counts.set(r.topic.name, (counts.get(r.topic.name) ?? 0) + 1);
+      }
+    }
+    return [...counts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 12);
+  };
+  const topicTrends = { "7": topFor(7), "30": topFor(30), "90": topFor(90) } as const;
+
   // Stats bar always reflects current state, independent of date navigator
   const stats = [
     { label: "All-Time Emails Received", value: totalEmails.toLocaleString(), icon: Mail },
@@ -101,6 +122,9 @@ export default async function DashboardPage({
           </div>
         ))}
       </div>
+
+      {/* Trending investment topics — independent of the date navigator */}
+      <TopicTrendChart trends={topicTrends} />
 
       {/* Date navigator — below stats bar */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
