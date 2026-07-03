@@ -29,7 +29,6 @@ export default async function DashboardPage({
   const prevDay = new Date(dayStart.getTime() - 24 * 60 * 60 * 1000);
   const nextDay = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
   const week = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const staleThreshold = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000);
 
   // Stats bar always shows current numbers regardless of selected date
   const now2 = new Date();
@@ -39,7 +38,7 @@ export default async function DashboardPage({
   const [
     totalEmails, todayEmails, weekEmails, totalPublishers,
     dayEmails, recentEmails, placementBreakdown, topTopics,
-    stalePublishers, staleLists, recentLearnings,
+    recentLearnings,
   ] = await Promise.all([
     prisma.email.count(),
     prisma.email.count({ where: { receivedAt: { gte: todayStart, lt: todayEnd } } }),
@@ -62,27 +61,6 @@ export default async function DashboardPage({
       orderBy: { _count: { topicId: "desc" } },
       take: 8,
     }),
-    // Stale publishers: have emails but none in last 6 days
-    prisma.publisher.findMany({
-      where: {
-        emails: {
-          some: { receivedAt: { lt: staleThreshold } },
-          none: { receivedAt: { gte: staleThreshold } },
-        },
-      },
-      select: { id: true, name: true },
-    }),
-    // Stale lists: have emails but none in last 6 days
-    prisma.list.findMany({
-      where: {
-        isIgnored: false,
-        emails: {
-          some: { receivedAt: { lt: staleThreshold } },
-          none: { receivedAt: { gte: staleThreshold } },
-        },
-      },
-      select: { id: true, name: true },
-    }),
     // Recent learnings for dashboard widget
     prisma.learning.findMany({
       where: { status: "PENDING" },
@@ -91,20 +69,6 @@ export default async function DashboardPage({
       select: { id: true, content: true, source: true, category: true, createdAt: true },
     }),
   ]);
-
-  // Get last email date for stale items
-  const stalePublisherDetails = await Promise.all(
-    stalePublishers.map(async (p) => {
-      const last = await prisma.email.findFirst({ where: { publisherId: p.id }, orderBy: { receivedAt: "desc" }, select: { receivedAt: true } });
-      return { ...p, lastEmail: last?.receivedAt ?? null };
-    })
-  );
-  const staleListDetails = await Promise.all(
-    staleLists.map(async (l) => {
-      const last = await prisma.email.findFirst({ where: { listId: l.id }, orderBy: { receivedAt: "desc" }, select: { receivedAt: true } });
-      return { ...l, lastEmail: last?.receivedAt ?? null };
-    })
-  );
 
   const topicIds = topTopics.map(t => t.topicId);
   const topicDetails = await prisma.topic.findMany({ where: { id: { in: topicIds } } });
@@ -127,15 +91,6 @@ export default async function DashboardPage({
       <div>
         <h1 className="text-2xl font-bold text-white">Daily Briefing</h1>
       </div>
-
-      {/* Stale alerts — always current, independent of date */}
-      {isToday && (stalePublisherDetails.length > 0 || staleListDetails.length > 0) && (
-        <DashboardClient
-          stalePublishers={stalePublisherDetails}
-          staleLists={staleListDetails}
-          showStale
-        />
-      )}
 
       {/* Stat cards — always current, not affected by date navigator */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { BookOpen, GitMerge, Pencil, Trash2, EyeOff, Eye, X, Check, Plus, ChevronDown } from "lucide-react";
 import StaleIcon from "@/components/StaleIcon";
+import WentSilent from "@/components/WentSilent";
 
 const CATEGORIES = ["FREE_EDITORIAL", "PAID_EDITORIAL", "HOTLIST", "MARKETING_FILE"] as const;
 const catLabel = (c: string) => c.replace("_", " ");
@@ -222,6 +223,8 @@ export default function ListsManager({ lists: initial, publishers, primaryGurus 
           </div>
         </div>
       )}
+
+      <WentSilent entity="lists" items={active.filter(l => l.isStale).map(l => ({ id: l.id, name: l.name, lastEmail: l.lastEmail ?? null }))} />
     </div>
   );
 }
