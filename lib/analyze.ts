@@ -670,7 +670,7 @@ DEFINITIONS:
 - EDITORIAL: Investment analysis, market commentary, stock picks from the publisher themselves.
 - PROMO: Direct sales for their OWN paid subscription.
 - WELCOME: Onboarding/confirmation email.
-- topics: Assign 1-2 PRIMARY topics that best categorize this email, then optionally up to 2 SECONDARY topics for specifics (max 4 total). Strongly prefer reusing topics from the lists above. Only introduce a new topic if nothing fits — new topics are filed as secondary for review, so keep the primary categories broad.`;
+- topics: ONLY investment subject matter that could headline editorial or a promo — sectors, asset classes, macro themes, trading strategies, or specific opportunities (e.g. "artificial intelligence", "uranium", "options income", "Fed policy", "small-cap stocks", "pre-IPO"). NEVER create topics for marketing mechanics, funnel stages, or lifestyle/aspiration framing (e.g. "event promotion", "membership conversion", "subscription upsell", "wealth diversity", "financial freedom", "guaranteed income") — the email's purpose is already captured by emailType, not topics. Assign 1-2 PRIMARY topics that best categorize the investment subject, then optionally up to 2 SECONDARY topics for specifics (max 4 total). Strongly prefer reusing topics from the lists above. Only introduce a new topic if nothing fits — new topics are filed as secondary for review, so keep the primary categories broad.`;
 
   try {
     const message = await client.messages.create({
