@@ -223,13 +223,17 @@ enum EmailType {
 // ─── Topics ───────────────────────────────────────────────────────────────────
 
 model Topic {
-  id        String       @id @default(cuid())
-  name      String       @unique
-  isIgnored Boolean      @default(false)
-  color     String?
-  synonyms  String[]
-  createdAt DateTime     @default(now())
-  emails    EmailTopic[]
+  id          String       @id @default(cuid())
+  name        String       @unique
+  isIgnored   Boolean      @default(false)
+  // Secondary = granular / less-significant detail topic. Kept out of Hot Topics
+  // and the trend chart; still tracked and filterable. New AI-coined topics
+  // default to secondary so the primary set stays curated.
+  isSecondary Boolean      @default(false)
+  color       String?
+  synonyms    String[]
+  createdAt   DateTime     @default(now())
+  emails      EmailTopic[]
 }
 
 model EmailTopic {

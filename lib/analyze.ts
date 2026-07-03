@@ -564,7 +564,7 @@ export async function analyzeEmail(
     prisma.publisher.findMany({ select: { id: true, name: true, domains: true, knownFromAddresses: true, type: true } }),
     prisma.list.findMany({ where: { isIgnored: false }, select: { id: true, name: true, publisherId: true, synonyms: true, category: true } }),
     prisma.guru.findMany({ where: { isIgnored: false }, select: { id: true, name: true, isSecondaryVoice: true, publisherId: true, secondaryPublishers: { select: { publisherId: true } } } }),
-    prisma.topic.findMany({ where: { isIgnored: false }, select: { name: true, synonyms: true } }),
+    prisma.topic.findMany({ where: { isIgnored: false }, select: { name: true, synonyms: true, isSecondary: true } }),
     prisma.topic.findMany({ where: { isIgnored: true }, select: { name: true, synonyms: true } }),
     prisma.guru.findMany({ where: { isIgnored: true }, select: { name: true } }),
     prisma.secondaryVoiceGuru.findMany({
@@ -599,9 +599,10 @@ export async function analyzeEmail(
   ]);
   const ignoredGuruNames = new Set(ignoredGurus.map(g => g.name.toLowerCase()));
 
-  const topicList = existingTopics
-    .map(t => t.synonyms.length > 0 ? `${t.name} (also: ${t.synonyms.join(", ")})` : t.name)
-    .join(", ");
+  const fmtTopic = (t: { name: string; synonyms: string[] }) =>
+    t.synonyms.length > 0 ? `${t.name} (also: ${t.synonyms.join(", ")})` : t.name;
+  const primaryTopicList = existingTopics.filter(t => !t.isSecondary).map(fmtTopic).join(", ");
+  const secondaryTopicList = existingTopics.filter(t => t.isSecondary).map(fmtTopic).join(", ");
 
   // ── Classification hints for known ambiguous addresses ──
   const emailDomainForHint = fromEmail.toLowerCase().split("@")[1] ?? "";
@@ -633,7 +634,8 @@ KNOWN PUBLISHERS: ${publishers.map(p => `${p.name} (${p.domains.join(", ")}) [${
 KNOWN NEWSLETTERS/LISTS: ${lists.map(l => l.name).join(", ") || "None"}
 KNOWN PRIMARY EDITORS/GURUS: ${gurus.filter(g => !g.isSecondaryVoice).map(g => g.name).join(", ") || "None"}
 SECONDARY VOICES (contributors/managing editors — NOT primary gurus, do not tag as main guru): ${gurus.filter(g => g.isSecondaryVoice).map(g => g.name).join(", ") || "None"}
-EXISTING TOPICS (reuse): ${topicList || "None"}
+PRIMARY TOPICS (significant categories — strongly prefer these): ${primaryTopicList || "None"}
+SECONDARY TOPICS (granular detail — use only when specifically relevant): ${secondaryTopicList || "None"}
 IGNORED TOPICS (never use): ${[...ignoredTopicNames].join(", ") || "None"}
 IGNORED GURUS (never use): ${[...ignoredGuruNames].join(", ") || "None"}
 VALIDATED INTELLIGENCE (facts confirmed by the user — use these to inform your analysis):
@@ -668,7 +670,7 @@ DEFINITIONS:
 - EDITORIAL: Investment analysis, market commentary, stock picks from the publisher themselves.
 - PROMO: Direct sales for their OWN paid subscription.
 - WELCOME: Onboarding/confirmation email.
-- topics: Max 4. Be specific. Reuse existing topics when they fit.`;
+- topics: Assign 1-2 PRIMARY topics that best categorize this email, then optionally up to 2 SECONDARY topics for specifics (max 4 total). Strongly prefer reusing topics from the lists above. Only introduce a new topic if nothing fits — new topics are filed as secondary for review, so keep the primary categories broad.`;
 
   try {
     const message = await client.messages.create({
@@ -931,7 +933,9 @@ DEFINITIONS:
     const dbEmailType = (rawType === "WELCOME" || rawType === "UNKNOWN" ? "EDITORIAL" : rawType) as "LIFT_NOTE" | "EDITORIAL" | "PROMO";
     const validTopics = (result.topics ?? []).filter(t => t && !ignoredTopicNames.has(t.toLowerCase()));
     const topicRecords = await Promise.all(
-      validTopics.map(name => prisma.topic.upsert({ where: { name: name.toLowerCase() }, update: {}, create: { name: name.toLowerCase() } }))
+      // New topics the AI coins default to secondary — the primary set is curated
+      // by promoting from the Topics page, so it stays small and meaningful.
+      validTopics.map(name => prisma.topic.upsert({ where: { name: name.toLowerCase() }, update: {}, create: { name: name.toLowerCase(), isSecondary: true } }))
     );
 
     // ── Save ──
