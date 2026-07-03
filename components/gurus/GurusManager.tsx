@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { User, GitMerge, Trash2, EyeOff, Eye, X, Check, Plus, ChevronDown, Users } from "lucide-react";
+import WentSilent from "@/components/WentSilent";
 
 interface Publisher { id: string; name: string }
 interface ListRef { id: string; name: string; category?: string; publisher: { id: string; name: string } | null }
@@ -24,7 +25,7 @@ interface GuruItem {
   _count: { emails: number };
 }
 
-export default function GurusManager({ gurus: initial, lists, publishers, isAdmin = false }: { gurus: GuruItem[]; lists: ListRef[]; publishers: Publisher[]; isAdmin?: boolean }) {
+export default function GurusManager({ gurus: initial, lists, publishers, staleGurus = [], isAdmin = false }: { gurus: GuruItem[]; lists: ListRef[]; publishers: Publisher[]; staleGurus?: { id: string; name: string; lastEmail: Date | string | null }[]; isAdmin?: boolean }) {
   const [gurus, setGurus] = useState(initial);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [merging, setMerging] = useState<string | null>(null);
@@ -455,6 +456,8 @@ export default function GurusManager({ gurus: initial, lists, publishers, isAdmi
           </div>
         </div>
       )}
+
+      <WentSilent entity="gurus" items={staleGurus} />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Users, Mail, TrendingUp, Pencil, Trash2, GitMerge, Check, X, Plus } from "lucide-react";
 import StaleIcon from "@/components/StaleIcon";
+import WentSilent from "@/components/WentSilent";
 
 const PUB_TYPES = ["INTERNAL", "COMPETITOR", "AFFILIATE_MARKETER"] as const;
 const typeLabel = (t: string) => t === "AFFILIATE_MARKETER" ? "Affiliate" : t === "INTERNAL" ? "Internal" : "Competitor";
@@ -256,6 +257,8 @@ export default function PublishersClient({ publishers: initial, weekMap, isAdmin
           </div>
         )}
       </div>
+
+      <WentSilent entity="publishers" items={publishers.filter(p => p.isStale).map(p => ({ id: p.id, name: p.name, lastEmail: p.lastEmail ?? null }))} />
     </div>
   );
 }
