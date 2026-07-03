@@ -3,7 +3,7 @@ import { useState } from "react";
 import { User, GitMerge, Trash2, EyeOff, Eye, X, Check, Plus, ChevronDown, Users } from "lucide-react";
 
 interface Publisher { id: string; name: string }
-interface ListRef { id: string; name: string; publisher: { id: string; name: string } | null }
+interface ListRef { id: string; name: string; category?: string; publisher: { id: string; name: string } | null }
 interface GuruListItem { listId: string; guruId: string; isPrimary: boolean; isIgnored: boolean; list: ListRef }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SecondaryLink = any;
@@ -190,14 +190,21 @@ export default function GurusManager({ gurus: initial, lists, publishers, isAdmi
     setGurus(gurus.filter(g => g.id !== id));
   }
 
-  function GRow({ guru }: { guru: GuruItem }) {
+  // NOTE: this is a plain render function, NOT a nested component (`<GRow/>`).
+  // Defining a component inside GurusManager gives it a new identity on every
+  // render, so React remounts the whole list on each state change — which resets
+  // the <main> scroll position to the top. Calling it as a function inlines the
+  // JSX and avoids the remount.
+  function renderGuruRow(guru: GuruItem) {
     const isExpanded = expandedId === guru.id;
     const edit = editState[guru.id];
-    const activeLists = guru.lists.filter(l => !l.isIgnored);
+    // Hotlists are temporary files — tracked on the Lists page, but hidden from a
+    // guru's list display so the roster stays clean.
+    const activeLists = guru.lists.filter(l => !l.isIgnored && l.list.category !== "HOTLIST");
     const availableLists = lists.filter(l => !guru.lists.some(gl => gl.listId === l.id && !gl.isIgnored));
 
     return (
-      <div>
+      <div key={guru.id}>
         {merging !== guru.id && (
           <div>
             {/* Row header */}
@@ -400,7 +407,7 @@ export default function GurusManager({ gurus: initial, lists, publishers, isAdmi
 
       {/* Primary guru list */}
       <div className="bg-gray-900 border border-gray-800 rounded-lg divide-y divide-gray-800 mb-6">
-        {filtered.map(guru => <GRow key={guru.id} guru={guru} />)}
+        {filtered.map(guru => renderGuruRow(guru))}
         {filtered.length === 0 && <p className="px-4 py-8 text-center text-gray-500 text-sm">No gurus yet. Run Initialize in Settings to auto-detect from emails.</p>}
       </div>
 

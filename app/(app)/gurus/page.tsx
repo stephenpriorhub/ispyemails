@@ -10,7 +10,7 @@ export default async function GurusPage() {
     prisma.guru.findMany({
       include: {
         publisher: { select: { id: true, name: true } },
-        lists: { include: { list: { select: { id: true, name: true, publisher: { select: { id: true, name: true } } } } } },
+        lists: { include: { list: { select: { id: true, name: true, category: true, publisher: { select: { id: true, name: true } } } } } },
         primaryGurus: { include: { primaryGuru: { select: { id: true, name: true } } } },
         secondaryVoices: { include: { secondaryVoice: { select: { id: true, name: true } } } },
         secondaryPublishers: { include: { publisher: { select: { id: true, name: true } } } },
