@@ -11,6 +11,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       lists: { include: { list: { include: { publisher: true } } } },
       primaryGurus: { include: { primaryGuru: true } },
       secondaryVoices: { include: { secondaryVoice: true } },
+      secondaryPublishers: { include: { publisher: { select: { id: true, name: true } } } },
       _count: { select: { emails: true } },
     },
   });

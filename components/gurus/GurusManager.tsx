@@ -12,6 +12,7 @@ interface SecondaryLinkDEL {
   secondaryVoice: { id: string; name: string };
   primaryGuru: { id: string; name: string };
 }
+interface GuruSecondaryPublisher { publisherId: string; publisher: Publisher }
 interface GuruItem {
   id: string; name: string; notes: string | null;
   isIgnored: boolean; isSecondaryVoice: boolean;
@@ -19,6 +20,7 @@ interface GuruItem {
   lists: GuruListItem[];
   primaryGurus: SecondaryLink[];
   secondaryVoices: SecondaryLink[];
+  secondaryPublishers: GuruSecondaryPublisher[];
   _count: { emails: number };
 }
 
@@ -33,6 +35,8 @@ export default function GurusManager({ gurus: initial, lists, publishers, isAdmi
   const [filterPublisher, setFilterPublisher] = useState("all");
   const [addingListFor, setAddingListFor] = useState<string | null>(null);
   const [selectedListId, setSelectedListId] = useState("");
+  const [addingSecPubFor, setAddingSecPubFor] = useState<string | null>(null);
+  const [selectedSecPubId, setSelectedSecPubId] = useState("");
 
   // Edit form state per guru
   const [editState, setEditState] = useState<Record<string, { name: string; publisherId: string }>>({});
@@ -76,7 +80,7 @@ export default function GurusManager({ gurus: initial, lists, publishers, isAdmi
     if (!addName.trim()) return;
     const res = await fetch("/api/gurus", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: addName.trim() }) });
     const g = await res.json();
-    setGurus([...gurus, { ...g, lists: [], primaryGurus: [], secondaryVoices: [], publisher: null, _count: { emails: 0 } }].sort((a, b) => a.name.localeCompare(b.name)));
+    setGurus([...gurus, { ...g, lists: [], primaryGurus: [], secondaryVoices: [], secondaryPublishers: [], publisher: null, _count: { emails: 0 } }].sort((a, b) => a.name.localeCompare(b.name)));
     setAddName(""); setShowAdd(false);
   }
 
@@ -136,6 +140,29 @@ export default function GurusManager({ gurus: initial, lists, publishers, isAdmi
       ? { ...g, lists: g.lists.map(l => l.listId === listId ? { ...l, isIgnored: true } : l) }
       : g
     ));
+  }
+
+  // Secondary publishers are MANUAL only — for the rare guru published by more
+  // than one house. Adding one lets that guru be a member of that publisher's lists.
+  async function addSecondaryPublisher(guruId: string, publisherId: string) {
+    const res = await fetch(`/api/gurus/${guruId}/secondary-publishers`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ publisherId }),
+    });
+    if (!res.ok) { const { error } = await res.json().catch(() => ({ error: "Failed to add" })); alert(error); return; }
+    const publisher = publishers.find(p => p.id === publisherId)!;
+    setGurus(gurus.map(g => g.id === guruId ? {
+      ...g, secondaryPublishers: [...g.secondaryPublishers.filter(sp => sp.publisherId !== publisherId), { publisherId, publisher }],
+    } : g));
+    setAddingSecPubFor(null); setSelectedSecPubId("");
+  }
+
+  async function removeSecondaryPublisher(guruId: string, publisherId: string) {
+    await fetch(`/api/gurus/${guruId}/secondary-publishers`, {
+      method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ publisherId }),
+    });
+    setGurus(gurus.map(g => g.id === guruId ? {
+      ...g, secondaryPublishers: g.secondaryPublishers.filter(sp => sp.publisherId !== publisherId),
+    } : g));
   }
 
   async function toggleIgnore(guru: GuruItem) {
@@ -238,6 +265,36 @@ export default function GurusManager({ gurus: initial, lists, publishers, isAdmi
                   >
                     <Check className="w-3 h-3" />Save changes
                   </button>
+                )}
+
+                {/* Secondary publishers — manual only, for multi-publisher gurus */}
+                {isAdmin && (
+                  <div>
+                    <p className="text-xs text-gray-500 font-medium mb-1.5">
+                      Secondary publishers
+                      <span className="text-gray-600 font-normal ml-1.5">— manual only; for gurus published by more than one house</span>
+                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {guru.secondaryPublishers.map(sp => (
+                        <span key={sp.publisherId} className="inline-flex items-center gap-1 text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded group/sp">
+                          {sp.publisher.name}
+                          <button onClick={() => removeSecondaryPublisher(guru.id, sp.publisherId)} className="text-gray-500 hover:text-red-400" title="Remove secondary publisher"><X className="w-3 h-3" /></button>
+                        </span>
+                      ))}
+                      {addingSecPubFor === guru.id ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <select value={selectedSecPubId} onChange={e => setSelectedSecPubId(e.target.value)} className="py-1 px-2 bg-gray-800 border border-gray-700 rounded text-xs text-gray-300 focus:outline-none focus:border-amber-500">
+                            <option value="">Select publisher…</option>
+                            {publishers.filter(p => p.id !== guru.publisherId && !guru.secondaryPublishers.some(sp => sp.publisherId === p.id)).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          </select>
+                          <button onClick={() => selectedSecPubId && addSecondaryPublisher(guru.id, selectedSecPubId)} disabled={!selectedSecPubId} className="flex items-center gap-1 px-2 py-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-black text-xs font-medium rounded"><Check className="w-3 h-3" />Add</button>
+                          <button onClick={() => { setAddingSecPubFor(null); setSelectedSecPubId(""); }} className="px-1.5 py-1 bg-gray-700 text-gray-300 text-xs rounded"><X className="w-3 h-3" /></button>
+                        </span>
+                      ) : (
+                        <button onClick={() => { setAddingSecPubFor(guru.id); setSelectedSecPubId(""); }} className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1"><Plus className="w-3 h-3" />Add secondary publisher</button>
+                      )}
+                    </div>
+                  </div>
                 )}
 
                 {/* Lists */}

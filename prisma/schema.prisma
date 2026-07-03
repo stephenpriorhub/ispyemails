@@ -68,6 +68,7 @@ model Publisher {
   learnings  Learning[]
   emails Email[]
   gurus  Guru[]
+  secondaryGurus GuruSecondaryPublisher[]
 }
 
 // ─── Lists (newsletters) ──────────────────────────────────────────────────────
@@ -115,6 +116,20 @@ model Guru {
   // Secondary voice relationships
   primaryGurus    SecondaryVoiceGuru[] @relation("SecondaryVoice")
   secondaryVoices SecondaryVoiceGuru[] @relation("PrimaryGuru")
+  // Additional publishers this guru writes for (MANUALLY set only — never auto-detected)
+  secondaryPublishers GuruSecondaryPublisher[]
+}
+
+// Additional publishers a guru is published by, beyond their primary `publisherId`.
+// Set ONLY by manual user action — the email analyzer must never write here. A guru
+// is a legitimate MEMBER of a list whose publisher is his primary OR any of these.
+model GuruSecondaryPublisher {
+  guruId      String
+  publisherId String
+  guru        Guru      @relation(fields: [guruId], references: [id], onDelete: Cascade)
+  publisher   Publisher @relation(fields: [publisherId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  @@id([guruId, publisherId])
 }
 
 // Links a secondary voice to the primary guru(s) they support
