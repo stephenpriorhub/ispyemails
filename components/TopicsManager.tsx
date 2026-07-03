@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Hash, EyeOff, Eye, GitMerge, Trash2, X, Check } from "lucide-react";
+import { Hash, EyeOff, Eye, GitMerge, Trash2, X, Check, ChevronsDown, ChevronsUp } from "lucide-react";
 
 interface Topic {
   id: string;
   name: string;
   isIgnored: boolean;
+  isSecondary: boolean;
   color: string | null;
   synonyms: string[];
   _count: { emails: number };
@@ -34,6 +35,19 @@ export default function TopicsManager({ topics }: { topics: Topic[] }) {
     if (!confirm("Delete this topic? It will be removed from all emails.")) return;
     await fetch(`/api/topics/${id}`, { method: "DELETE" });
     setList(list.filter((t) => t.id !== id));
+  }
+
+  // Move a topic between the primary (significant) and secondary (granular) tiers.
+  async function toggleSecondary(topic: Topic) {
+    setLoading(topic.id);
+    const res = await fetch(`/api/topics/${topic.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isSecondary: !topic.isSecondary }),
+    });
+    const updated = await res.json();
+    setList(list.map((t) => (t.id === topic.id ? { ...t, isSecondary: updated.isSecondary } : t)));
+    setLoading(null);
   }
 
   async function doMerge(sourceId: string) {
@@ -65,10 +79,13 @@ export default function TopicsManager({ topics }: { topics: Topic[] }) {
     setLoading(null);
   }
 
-  const active = list.filter((t) => !t.isIgnored);
+  const primary = list.filter((t) => !t.isIgnored && !t.isSecondary);
+  const secondary = list.filter((t) => !t.isIgnored && t.isSecondary);
   const ignored = list.filter((t) => t.isIgnored);
 
-  function TopicRow({ topic }: { topic: Topic }) {
+  // Plain render function (NOT a nested <TopicRow/> component) so state changes
+  // don't remount the whole list and reset scroll — same fix as the guru page.
+  function renderTopicRow(topic: Topic) {
     return (
       <div key={topic.id}>
         {/* Normal row */}
@@ -93,6 +110,14 @@ export default function TopicsManager({ topics }: { topics: Topic[] }) {
                 title="Merge into another topic"
               >
                 <GitMerge className="w-3 h-3" /> Merge
+              </button>
+              <button
+                onClick={() => toggleSecondary(topic)}
+                disabled={loading === topic.id}
+                className="flex items-center gap-1 px-2 py-1 text-xs text-gray-500 hover:text-purple-400 hover:bg-gray-800 rounded transition-colors"
+                title={topic.isSecondary ? "Promote to primary topic" : "Move to secondary (granular) topic"}
+              >
+                {topic.isSecondary ? <><ChevronsUp className="w-3 h-3" /> Primary</> : <><ChevronsDown className="w-3 h-3" /> Secondary</>}
               </button>
               <button
                 onClick={() => toggleIgnore(topic)}
@@ -164,20 +189,33 @@ export default function TopicsManager({ topics }: { topics: Topic[] }) {
           Topics
         </h1>
         <p className="text-gray-400 text-sm mt-1">
-          Merge duplicates to teach the AI, ignore topics to suppress them, or delete to remove entirely.
+          <strong className="text-gray-300">Primary</strong> topics are the significant categories that drive Hot Topics and trends.
+          <strong className="text-gray-300"> Secondary</strong> topics are granular detail — still tracked, just kept out of the way.
+          Use Primary / Secondary to move a topic between tiers.
         </p>
       </div>
 
       <div className="space-y-6">
         <div>
-          <h2 className="text-sm font-medium text-gray-400 mb-3">Active ({active.length})</h2>
+          <h2 className="text-sm font-medium text-gray-400 mb-3">Primary ({primary.length})</h2>
           <div className="bg-gray-900 border border-gray-800 rounded-lg divide-y divide-gray-800">
-            {active.map((topic) => <TopicRow key={topic.id} topic={topic} />)}
-            {active.length === 0 && (
-              <p className="px-4 py-6 text-gray-500 text-sm text-center">No active topics yet</p>
+            {primary.map((topic) => renderTopicRow(topic))}
+            {primary.length === 0 && (
+              <p className="px-4 py-6 text-gray-500 text-sm text-center">No primary topics yet</p>
             )}
           </div>
         </div>
+
+        {secondary.length > 0 && (
+          <div>
+            <h2 className="text-sm font-medium text-gray-400 mb-3">
+              Secondary — granular ({secondary.length})
+            </h2>
+            <div className="bg-gray-900 border border-gray-800 rounded-lg divide-y divide-gray-800">
+              {secondary.map((topic) => renderTopicRow(topic))}
+            </div>
+          </div>
+        )}
 
         {ignored.length > 0 && (
           <div>
