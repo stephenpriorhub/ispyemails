@@ -141,7 +141,9 @@ urgency_type examples: none, deadline, countdown, scarcity, event-driven`;
 
     const message = await client.messages.create({
       model: "claude-sonnet-4-5",
-      max_tokens: 2048,
+      // The deep-analysis JSON schema fills out to ~600-900 output tokens in
+      // practice; 1024 caps the worst case without truncating typical responses.
+      max_tokens: 1024,
       messages: [{ role: "user", content: `${systemPrompt}\n\n${userPrompt}` }],
     });
 
@@ -620,15 +622,14 @@ export async function analyzeEmail(
     );
   }
 
-  const prompt = `You are an expert analyst of financial newsletter emails in the direct-response publishing industry.
-Analyze this email and return ONLY valid JSON — no markdown, no explanation.
-${classificationHints.length > 0 ? "\n" + classificationHints.join("\n") + "\n" : ""}
-FROM: ${fromName || fromEmail} <${fromEmail}>
-SUBJECT: ${subject}
-MASTHEAD SIGNALS (image alt text, headings from top of email — newsletter name often here):
-${mastheadContext || "None detected"}
-
-BODY: ${cleanBody}
+  // ── Static reference block (cached) ──
+  // This block is byte-for-byte identical for every email processed in the same
+  // sync batch, so we mark it with cache_control. Anthropic prompt caching then
+  // bills it at ~10% of input price on every call after the first (5-min TTL,
+  // which comfortably covers a back-to-back batch). The per-email data lives in
+  // a separate, uncached block below so a cache hit isn't broken by it.
+  const staticRef = `You are an expert analyst of financial newsletter emails in the direct-response publishing industry.
+Analyze the email in the "EMAIL TO ANALYZE" section below and return ONLY valid JSON — no markdown, no explanation.
 
 KNOWN PUBLISHERS: ${publishers.map(p => `${p.name} (${p.domains.join(", ")}) [${p.type}]`).join(" | ") || "None"}
 KNOWN NEWSLETTERS/LISTS: ${lists.map(l => l.name).join(", ") || "None"}
@@ -672,11 +673,28 @@ DEFINITIONS:
 - WELCOME: Onboarding/confirmation email.
 - topics: ONLY investment subject matter that could headline editorial or a promo — sectors, asset classes, macro themes, trading strategies, or specific opportunities (e.g. "artificial intelligence", "uranium", "options income", "Fed policy", "small-cap stocks", "pre-IPO"). NEVER create topics for marketing mechanics, funnel stages, or lifestyle/aspiration framing (e.g. "event promotion", "membership conversion", "subscription upsell", "wealth diversity", "financial freedom", "guaranteed income") — the email's purpose is already captured by emailType, not topics. Assign 1-2 PRIMARY topics that best categorize the investment subject, then optionally up to 2 SECONDARY topics for specifics (max 4 total). Strongly prefer reusing topics from the lists above. Only introduce a new topic if nothing fits — new topics are filed as secondary for review, so keep the primary categories broad.`;
 
+  // ── Per-email block (not cached) ──
+  const emailBlock = `EMAIL TO ANALYZE:
+${classificationHints.length > 0 ? classificationHints.join("\n") + "\n" : ""}FROM: ${fromName || fromEmail} <${fromEmail}>
+SUBJECT: ${subject}
+MASTHEAD SIGNALS (image alt text, headings from top of email — newsletter name often here):
+${mastheadContext || "None detected"}
+
+BODY: ${cleanBody}
+
+Return ONLY the JSON object described above, populated for THIS email.`;
+
   try {
     const message = await client.messages.create({
       model: "claude-haiku-4-5",
       max_tokens: 1024,
-      messages: [{ role: "user", content: prompt }],
+      messages: [{
+        role: "user",
+        content: [
+          { type: "text", text: staticRef, cache_control: { type: "ephemeral" } },
+          { type: "text", text: emailBlock },
+        ],
+      }],
     });
 
     const content = message.content[0];

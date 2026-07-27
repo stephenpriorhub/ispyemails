@@ -1,7 +1,7 @@
 import { google } from "googleapis";
 import { prisma } from "./prisma";
 import { getAuthedClient, placementFromLabels, extractHeader, parseFrom, extractBodies } from "./gmail";
-import { analyzeEmail } from "./analyze";
+import { analyzeEmail, extractListForEmail } from "./analyze";
 
 export async function syncGmailAccount(accountEmail: string): Promise<{ newEmails: number; errors: number }> {
   let newEmails = 0, errors = 0;
@@ -66,39 +66,88 @@ export async function syncGmailAccount(accountEmail: string): Promise<{ newEmail
         if (!classified?.listId) missingFields.push("list");
         if (!classified?.topics || classified.topics.length === 0) missingFields.push("topics");
         if (!classified?.emailType || classified.emailType === "UNKNOWN") missingFields.push("emailType");
+
         if (missingFields.length > 0) {
-          console.warn(`⚠ Missing after analysis [${email.id}]: ${missingFields.join(", ")} — retrying`);
-          await analyzeEmail(email.id, subject, from.name, from.email, text, html, accountEmail);
-          // Check again; if still missing, force-set safe defaults
-          const recheck = await prisma.email.findUnique({
-            where: { id: email.id },
-            select: { publisherId: true, listId: true, emailType: true, topics: { select: { topicId: true } } },
-          });
-          const stillMissing: string[] = [];
-          if (!recheck?.publisherId) stillMissing.push("publisher");
-          if (!recheck?.listId) stillMissing.push("list");
-          if (!recheck?.topics || recheck.topics.length === 0) stillMissing.push("topics");
-          if (!recheck?.emailType || recheck.emailType === "UNKNOWN") stillMissing.push("emailType");
-          if (stillMissing.length > 0) {
-            console.error(`✗ Still missing after retry [${email.id}]: ${stillMissing.join(", ")} — applying safe defaults`);
-            // Ensure at least one topic exists
-            let topicId: string | null = null;
-            if (stillMissing.includes("topics")) {
-              const fallbackTopic = await prisma.topic.upsert({ where: { name: "markets" }, update: {}, create: { name: "markets" } });
-              topicId = fallbackTopic.id;
-            }
-            await prisma.email.update({
+          // analyzeEmail always resolves a publisher and an emailType on any pass
+          // that actually completes (it has last-resort fallbacks for both). So a
+          // MISSING publisher means the whole pass errored out — only then is a
+          // second full (expensive) classification pass warranted. A partial gap
+          // (usually just the list name) is filled cheaply below, avoiding a
+          // needless re-send of the entire Pass-1 prompt.
+          const fullFailure = !classified?.publisherId;
+
+          if (fullFailure) {
+            console.warn(`⚠ Analysis produced nothing [${email.id}]: ${missingFields.join(", ")} — re-running once`);
+            await analyzeEmail(email.id, subject, from.name, from.email, text, html, accountEmail);
+            const recheck = await prisma.email.findUnique({
               where: { id: email.id },
-              data: {
-                emailType: stillMissing.includes("emailType") ? "EDITORIAL" : undefined,
-                isProcessed: true,
-                ...(topicId ? { topics: { deleteMany: {}, create: [{ topicId, confidence: 1.0 }] } } : {}),
-              },
+              select: { publisherId: true, listId: true, emailType: true, topics: { select: { topicId: true } } },
             });
+            const stillMissing: string[] = [];
+            if (!recheck?.publisherId) stillMissing.push("publisher");
+            if (!recheck?.listId) stillMissing.push("list");
+            if (!recheck?.topics || recheck.topics.length === 0) stillMissing.push("topics");
+            if (!recheck?.emailType || recheck.emailType === "UNKNOWN") stillMissing.push("emailType");
+            if (stillMissing.length > 0) {
+              console.error(`✗ Still missing after re-run [${email.id}]: ${stillMissing.join(", ")} — applying safe defaults`);
+              // Ensure at least one topic exists
+              let topicId: string | null = null;
+              if (stillMissing.includes("topics")) {
+                const fallbackTopic = await prisma.topic.upsert({ where: { name: "markets" }, update: {}, create: { name: "markets" } });
+                topicId = fallbackTopic.id;
+              }
+              await prisma.email.update({
+                where: { id: email.id },
+                data: {
+                  emailType: stillMissing.includes("emailType") ? "EDITORIAL" : undefined,
+                  isProcessed: true,
+                  ...(topicId ? { topics: { deleteMany: {}, create: [{ topicId, confidence: 1.0 }] } } : {}),
+                },
+              });
+            } else {
+              // Re-run succeeded — mark processed if not already done by analyzeEmail
+              const final = await prisma.email.findUnique({ where: { id: email.id }, select: { isProcessed: true } });
+              if (!final?.isProcessed) await prisma.email.update({ where: { id: email.id }, data: { isProcessed: true } });
+            }
           } else {
-            // Retry succeeded — mark processed if not already done by analyzeEmail
-            const final = await prisma.email.findUnique({ where: { id: email.id }, select: { isProcessed: true } });
-            if (!final?.isProcessed) await prisma.email.update({ where: { id: email.id }, data: { isProcessed: true } });
+            // Partial result — the analysis largely succeeded. Fill the small gaps
+            // with the lightweight list extractor + safe defaults instead of paying
+            // for a second full Pass-1 classification.
+            console.warn(`⚠ Partial analysis [${email.id}]: ${missingFields.join(", ")} — filling without a full re-run`);
+            const patch: {
+              listId?: string;
+              emailType?: "EDITORIAL";
+              topics?: { deleteMany: object; create: { topicId: string; confidence: number }[] };
+            } = {};
+
+            if (!classified?.listId) {
+              const listName = await extractListForEmail(subject, from.email, html, from.name);
+              if (listName) {
+                const existing = await prisma.list.findFirst({ where: { name: { equals: listName, mode: "insensitive" } } });
+                if (existing) {
+                  patch.listId = existing.id;
+                } else {
+                  try {
+                    const newList = await prisma.list.create({
+                      data: { name: listName, publisherId: classified?.publisherId ?? null, isIgnored: false, autoCreated: true },
+                    });
+                    patch.listId = newList.id;
+                  } catch {
+                    const found = await prisma.list.findFirst({ where: { name: { equals: listName, mode: "insensitive" } } });
+                    if (found) patch.listId = found.id;
+                  }
+                }
+              }
+            }
+
+            if (!classified?.topics || classified.topics.length === 0) {
+              const fallbackTopic = await prisma.topic.upsert({ where: { name: "markets" }, update: {}, create: { name: "markets" } });
+              patch.topics = { deleteMany: {}, create: [{ topicId: fallbackTopic.id, confidence: 1.0 }] };
+            }
+
+            if (!classified?.emailType || classified.emailType === "UNKNOWN") patch.emailType = "EDITORIAL";
+
+            await prisma.email.update({ where: { id: email.id }, data: { ...patch, isProcessed: true } });
           }
         }
       } else {

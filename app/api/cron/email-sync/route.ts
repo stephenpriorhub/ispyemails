@@ -3,15 +3,25 @@ import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
 import { syncGmailAccount } from "@/lib/sync";
 
-// Called by Railway cron every hour: GET /api/cron/email-sync
-// Protected by CRON_SECRET env var (set same value in Railway + cron job header)
+// Optional external trigger for the Gmail sync: GET /api/cron/email-sync
+// (The app already self-syncs every 3h via the in-process scheduler in
+// instrumentation.ts, so this endpoint is only needed if you wire an external
+// cron. There is currently NO Railway cron configured for it.)
+//
+// Fails closed: it will not run unless CRON_SECRET is set AND the caller
+// presents it. This prevents the endpoint from being an unauthenticated,
+// publicly-triggerable full Gmail sync.
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get("x-cron-secret") ?? new URL(req.url).searchParams.get("secret");
-    if (auth !== secret) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  if (!secret) {
+    return NextResponse.json(
+      { error: "Disabled — set CRON_SECRET to enable the external sync trigger" },
+      { status: 503 },
+    );
+  }
+  const auth = req.headers.get("x-cron-secret") ?? new URL(req.url).searchParams.get("secret");
+  if (auth !== secret) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const accounts = await prisma.gmailAccount.findMany({ where: { isActive: true } });
