@@ -697,6 +697,12 @@ Return ONLY the JSON object described above, populated for THIS email.`;
       }],
     });
 
+    // Cache telemetry — confirms prompt caching is actually registering.
+    // Haiku 4.5 silently skips caching for prefixes under ~4096 tokens, so a
+    // persistent write:0 read:0 here means the static block is too small.
+    const u = message.usage;
+    console.log(`[Pass1 cache] read:${u?.cache_read_input_tokens ?? 0} write:${u?.cache_creation_input_tokens ?? 0} uncached:${u?.input_tokens ?? 0}`);
+
     const content = message.content[0];
     if (content.type !== "text") throw new Error("Unexpected response type");
     const jsonMatch = content.text.replace(/```json\n?/g, "").replace(/```\n?/g, "").match(/\{[\s\S]*\}/);
