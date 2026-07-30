@@ -648,7 +648,7 @@ Return ONLY this JSON:
   "publisherConfidence": 0.0,
   "list": "Newsletter/list name — check MASTHEAD SIGNALS first (image alts/headings above), then subject, then body. e.g. Image:'ALTUCHER CONFIDENTIAL' → 'Altucher Confidential'",
   "listConfidence": 0.0,
-  "gurus": ["Editor or author names found in the email"],
+  "gurus": ["ONLY the actual author/editor who WROTE this email — see rules; empty if unsure"],
   "emailType": "LIFT_NOTE|EDITORIAL|PROMO|WELCOME|UNKNOWN",
   "topics": ["topic1", "topic2"],
   "offer": { "url": "https://... or null", "promise": "pitch or null", "ticker": "TICK or null" },
@@ -666,7 +666,7 @@ LEARNING RULES — only include learnings that are SIGNIFICANT and NOVEL:
 
 DEFINITIONS:
 - list: The NEWSLETTER NAME shown in the masthead/header (e.g. "Daily Reckoning", "Stansberry Digest"). Distinct from the publisher company.
-- gurus: Names of editors, authors, or analysts who wrote or are featured. Look for "Editor" bylines, "From the desk of", signatures.
+- gurus: The editor/author who ACTUALLY WROTE this email — the editorial voice behind it. Identify from the masthead, "From the desk of", byline, and signature. Include ONLY the real author(s). Do NOT include anyone merely mentioned, quoted, interviewed, or PROMOTED — e.g. a promo touting another analyst's stock pick, a "my friend [Name]" lift note, or a competitor named in passing. If the email is a promo/lift note featuring someone who did not write it, leave them OUT. When you cannot tell who wrote it, prefer an empty list over guessing.
 - LIFT_NOTE: Promotes ANOTHER publisher's product (affiliate). Key: "my friend", "fellow investor", promotes someone else.
 - EDITORIAL: Investment analysis, market commentary, stock picks from the publisher themselves.
 - PROMO: Direct sales for their OWN paid subscription.
@@ -921,12 +921,18 @@ Return ONLY the JSON object described above, populated for THIS email.`;
       if (existing) {
         // Skip secondary voices from direct email tagging
         if (existing.isSecondaryVoice) continue;
+        const existingAllowedPublishers = [existing.publisherId, ...existing.secondaryPublishers.map(sp => sp.publisherId)].filter((x): x is string => !!x);
+        // A guru assigned to a publisher is only ever the AUTHOR of that publisher's
+        // emails. If this email is from a DIFFERENT publisher, the guru is merely being
+        // mentioned or promoted (e.g. an Oxford Club promo touting a Paradigm editor's
+        // pick) — do NOT tag them, or the guru filter fills with emails they never wrote.
+        // This mirrors guruMayJoinList, but gates the email tag itself, not just membership.
+        if (!guruMayJoinList(existingAllowedPublishers, publisherId)) continue;
         guruIds.push(existing.id);
         // Auto-link guru to list — but SKIP if user has marked this association as ignored,
         // SKIP entirely for affiliate seeds (bylined gurus don't belong to the affiliate),
         // and SKIP when the guru is assigned to a DIFFERENT publisher than this list's
         // owner (he's a guest / being promoted here, not a member — see guruMayJoinList).
-        const existingAllowedPublishers = [existing.publisherId, ...existing.secondaryPublishers.map(sp => sp.publisherId)].filter((x): x is string => !!x);
         if (listId && !isAffiliateSeed && guruMayJoinList(existingAllowedPublishers, listPublisherId)) {
           const linked = await prisma.guruList.findUnique({ where: { guruId_listId: { guruId: existing.id, listId } } });
           if (!linked) {
