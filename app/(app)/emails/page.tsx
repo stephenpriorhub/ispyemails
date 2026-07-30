@@ -17,6 +17,10 @@ export default async function EmailsPage({
   if (sp.type) where.emailType = sp.type;
   if (sp.topic) where.topics = { some: { topicId: sp.topic } };
   if (sp.list) where.listId = sp.list;
+  const daysNum = sp.days ? parseInt(sp.days) : NaN;
+  if (Number.isFinite(daysNum) && daysNum > 0) {
+    where.receivedAt = { gte: new Date(Date.now() - daysNum * 24 * 60 * 60 * 1000) };
+  }
   if (sp.guru) {
     const secondaryVoices = await prisma.secondaryVoiceGuru.findMany({ where: { primaryGuruId: sp.guru }, select: { secondaryVoiceId: true } });
     const allGuruIds = [sp.guru, ...secondaryVoices.map(sv => sv.secondaryVoiceId)];
@@ -32,5 +36,5 @@ export default async function EmailsPage({
     prisma.list.findMany({ where:{isIgnored:false}, orderBy:{name:"asc"}, select:{id:true,name:true} }),
     prisma.guru.findMany({ where:{isIgnored:false,isSecondaryVoice:false}, orderBy:{name:"asc"}, select:{id:true,name:true} }),
   ]);
-  return <EmailList emails={emails} total={total} page={page} pages={Math.ceil(total/limit)} publishers={publishers} topics={topics} lists={lists} gurus={gurus} filters={{ publisherId:sp.publisher, topicId:sp.topic, placement:sp.placement, emailType:sp.type, search:sp.q, listId:sp.list, guruId:sp.guru, sortBy, order }} isAdmin={isAdmin} />;
+  return <EmailList emails={emails} total={total} page={page} pages={Math.ceil(total/limit)} publishers={publishers} topics={topics} lists={lists} gurus={gurus} filters={{ publisherId:sp.publisher, topicId:sp.topic, placement:sp.placement, emailType:sp.type, search:sp.q, listId:sp.list, guruId:sp.guru, days:sp.days, sortBy, order }} isAdmin={isAdmin} />;
 }

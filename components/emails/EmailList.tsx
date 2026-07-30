@@ -37,7 +37,7 @@ interface Props {
   gurus?:{id:string;name:string}[];
   filters:{
     publisherId?:string; topicId?:string; placement?:string; emailType?:string;
-    search?:string; listId?:string; guruId?:string; sortBy:string; order:string;
+    search?:string; listId?:string; guruId?:string; days?:string; sortBy:string; order:string;
   };
   isAdmin?: boolean;
 }
@@ -69,9 +69,10 @@ export default function EmailList({ emails,total,page,pages,publishers,topics,li
     filters.publisherId && { key:"publisher", label:`Publisher: ${publishers.find(p=>p.id===filters.publisherId)?.name??filters.publisherId}` },
     filters.listId && { key:"list", label:`List: ${lists.find(l=>l.id===filters.listId)?.name??filters.listId}` },
     filters.guruId && { key:"guru", label:`Guru: ${gurus.find(g=>g.id===filters.guruId)?.name??filters.guruId}` },
-    filters.topicId && { key:"topic", label:`Topic: ${filters.topicId}` },
+    filters.topicId && { key:"topic", label:`Topic: ${topics.find(t=>t.id===filters.topicId)?.name??filters.topicId}` },
     filters.placement && { key:"placement", label:filters.placement },
     filters.emailType && { key:"type", label:filters.emailType.replace("_"," ") },
+    filters.days && { key:"days", label:`Last ${filters.days} days` },
     filters.search && { key:"q", label:`"${filters.search}"` },
   ].filter(Boolean) as {key:string;label:string}[];
 

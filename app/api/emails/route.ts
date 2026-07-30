@@ -12,6 +12,10 @@ export async function GET(req: NextRequest) {
   if (sp.get("topic")) where.topics = { some: { topicId: sp.get("topic") } };
   if (sp.get("tag")) where.tags = { some: { tagId: sp.get("tag") } };
   if (sp.get("list")) where.listId = sp.get("list");
+  const daysNum = sp.get("days") ? parseInt(sp.get("days")!) : NaN;
+  if (Number.isFinite(daysNum) && daysNum > 0) {
+    where.receivedAt = { gte: new Date(Date.now() - daysNum * 24 * 60 * 60 * 1000) };
+  }
 
   // Guru filter: include emails tagged with this guru OR any of their secondary voices
   if (sp.get("guru")) {

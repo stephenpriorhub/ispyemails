@@ -4,6 +4,8 @@ import Link from "next/link";
 import { Mail, Users, TrendingUp, Inbox } from "lucide-react";
 import DashboardClient from "@/components/dashboard/DashboardClient";
 import TopicTrendChart from "@/components/dashboard/TopicTrendChart";
+import WeeklyDigestCard from "@/components/dashboard/WeeklyDigestCard";
+import { getWeeklyDigest } from "@/lib/weekly-digest";
 import LocalTime from "@/components/dashboard/LocalTime";
 import { Bot, UserCog } from "lucide-react";
 
@@ -81,20 +83,25 @@ export default async function DashboardPage({
   // Trending investment topics — count of emails per PRIMARY topic across the
   // last 90 days; the client toggles 7 / 30 / 90 day windows over this data.
   const d90 = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-  const trendRows = await prisma.emailTopic.findMany({
-    where: { email: { receivedAt: { gte: d90 } }, topic: { isSecondary: false, isIgnored: false } },
-    select: { topic: { select: { name: true } }, email: { select: { receivedAt: true } } },
-  });
+  const [trendRows, weeklyDigest] = await Promise.all([
+    prisma.emailTopic.findMany({
+      where: { email: { receivedAt: { gte: d90 } }, topic: { isSecondary: false, isIgnored: false } },
+      select: { topic: { select: { id: true, name: true } }, email: { select: { receivedAt: true } } },
+    }),
+    getWeeklyDigest(),
+  ]);
   const nowMs = Date.now();
   const topFor = (days: number) => {
     const cutoff = nowMs - days * 24 * 60 * 60 * 1000;
-    const counts = new Map<string, number>();
+    const counts = new Map<string, { id: string; name: string; count: number }>();
     for (const r of trendRows) {
       if (new Date(r.email.receivedAt).getTime() >= cutoff) {
-        counts.set(r.topic.name, (counts.get(r.topic.name) ?? 0) + 1);
+        const cur = counts.get(r.topic.id) ?? { id: r.topic.id, name: r.topic.name, count: 0 };
+        cur.count++;
+        counts.set(r.topic.id, cur);
       }
     }
-    return [...counts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 12);
+    return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 12);
   };
   const topicTrends = { "7": topFor(7), "30": topFor(30), "90": topFor(90) } as const;
 
@@ -122,6 +129,9 @@ export default async function DashboardPage({
           </div>
         ))}
       </div>
+
+      {/* This Week in the Industry — rolling 7d topic summary + AI narrative */}
+      <WeeklyDigestCard digest={weeklyDigest} />
 
       {/* Trending investment topics — independent of the date navigator */}
       <TopicTrendChart trends={topicTrends} />
