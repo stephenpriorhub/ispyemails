@@ -17,6 +17,8 @@ interface Publisher { id: string; name: string }
 interface Guru { id: string; name: string; isIgnored: boolean }
 interface ListItem {
   id: string; name: string; category: string; isIgnored: boolean; notes: string | null;
+  editorialPubCode?: string | null;
+  dedicatedPubCode?: string | null;
   publisher: Publisher | null;
   gurus: { guru: Guru }[];
   _count: { emails: number };
@@ -29,7 +31,7 @@ export default function ListsManager({ lists: initial, publishers, primaryGurus 
   const [editing, setEditing] = useState<string | null>(null);
   const [merging, setMerging] = useState<string | null>(null);
   const [mergeTarget, setMergeTarget] = useState("");
-  const [editForm, setEditForm] = useState({ name: "", category: "FREE_EDITORIAL", publisherId: "", notes: "" });
+  const [editForm, setEditForm] = useState({ name: "", category: "FREE_EDITORIAL", publisherId: "", notes: "", editorialPubCode: "", dedicatedPubCode: "" });
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({ name: "", category: "FREE_EDITORIAL", publisherId: "" });
   const [loading, setLoading] = useState<string | null>(null);
@@ -48,7 +50,7 @@ export default function ListsManager({ lists: initial, publishers, primaryGurus 
 
   async function saveEdit(id: string) {
     setLoading(id);
-    const res = await fetch(`/api/lists/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: editForm.name, category: editForm.category, publisherId: editForm.publisherId || null, notes: editForm.notes || null }) });
+    const res = await fetch(`/api/lists/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: editForm.name, category: editForm.category, publisherId: editForm.publisherId || null, notes: editForm.notes || null, editorialPubCode: editForm.editorialPubCode.trim() || null, dedicatedPubCode: editForm.dedicatedPubCode.trim() || null }) });
     const updated = await res.json();
     setLists(lists.map(l => l.id === id ? { ...l, ...updated, publisher: publishers.find(p => p.id === updated.publisherId) ?? null } : l));
     setEditing(null);
@@ -156,13 +158,15 @@ export default function ListsManager({ lists: initial, publishers, primaryGurus 
                     {list.gurus.filter(g => !g.guru.isIgnored).length > 0 && (
                       <span>Editors: {list.gurus.filter(g => !g.guru.isIgnored).map(g => g.guru.name).join(", ")}</span>
                     )}
+                    {list.editorialPubCode && <span className="text-emerald-400/80" title="Editorial pub code">ED: {list.editorialPubCode}</span>}
+                    {list.dedicatedPubCode && <span className="text-emerald-400/80" title="Dedicated pub code">DED: {list.dedicatedPubCode}</span>}
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
                   <a href={`/emails?list=${list.id}`} className="p-1.5 text-gray-500 hover:text-amber-400 hover:bg-gray-800 rounded transition-colors" title="View emails">→</a>
                   {isAdmin && (
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => { setEditing(list.id); setEditForm({ name: list.name, category: list.category, publisherId: list.publisher?.id ?? "", notes: list.notes ?? "" }); }} className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-800 rounded"><Pencil className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => { setEditing(list.id); setEditForm({ name: list.name, category: list.category, publisherId: list.publisher?.id ?? "", notes: list.notes ?? "", editorialPubCode: list.editorialPubCode ?? "", dedicatedPubCode: list.dedicatedPubCode ?? "" }); }} className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-800 rounded"><Pencil className="w-3.5 h-3.5" /></button>
                     <button onClick={() => { setMerging(list.id); setMergeTarget(""); }} className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-gray-800 rounded"><GitMerge className="w-3.5 h-3.5" /></button>
                     <button onClick={() => toggleIgnore(list)} className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-800 rounded"><EyeOff className="w-3.5 h-3.5" /></button>
                     <button onClick={() => deleteList(list.id, list.name)} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-800 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
@@ -185,6 +189,19 @@ export default function ListsManager({ lists: initial, publishers, primaryGurus 
                   </select>
                 </div>
                 <textarea value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} placeholder="Notes…" rows={2} className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500" />
+                <div>
+                  <p className="text-xs text-gray-500 mb-1.5">Internal pub codes — links this list to our internal MTA email lists (for MTATRIX). Leave blank for competitor lists.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] uppercase tracking-wide text-gray-500 mb-1">Editorial pub code</label>
+                      <input value={editForm.editorialPubCode} onChange={e => setEditForm({ ...editForm, editorialPubCode: e.target.value })} placeholder="e.g. editorial send code" className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] uppercase tracking-wide text-gray-500 mb-1">Dedicated pub code</label>
+                      <input value={editForm.dedicatedPubCode} onChange={e => setEditForm({ ...editForm, dedicatedPubCode: e.target.value })} placeholder="e.g. promo / lift-note code" className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500" />
+                    </div>
+                  </div>
+                </div>
                 <div className="flex gap-2">
                   <button onClick={() => saveEdit(list.id)} disabled={loading === list.id} className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black text-xs font-medium rounded"><Check className="w-3 h-3" />Save</button>
                   <button onClick={() => setEditing(null)} className="px-3 py-1.5 bg-gray-700 text-gray-300 text-xs rounded"><X className="w-3 h-3 inline mr-1" />Cancel</button>

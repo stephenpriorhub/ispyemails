@@ -87,6 +87,10 @@ model List {
   publisherId String?
   publisher   Publisher?   @relation(fields: [publisherId], references: [id])
   notes       String?
+  // Internal pub codes — link an iSpy list to internal MTA email lists (for MTATRIX).
+  // Most lists won't have these; they're only for our own lists, not competitors'.
+  editorialPubCode String? // editorial sends (T-Letters, articles)
+  dedicatedPubCode String? // promos / lift notes
   synonyms    String[]
   isIgnored   Boolean      @default(false)
   autoCreated Boolean      @default(false)
