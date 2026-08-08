@@ -814,6 +814,7 @@ Return ONLY the JSON object described above, populated for THIS email.`;
     let listId: string | null = null;
     let listPublisherId: string | null = null; // the publisher that OWNS the resolved list
     let listCategory: string | null = null;     // FREE_EDITORIAL | PAID_EDITORIAL | HOTLIST | MARKETING_FILE
+    let listWasCreated = false;                  // true only when THIS pass minted a brand-new list
     if (isAffiliateSeed) {
       listId = await upsertAffiliateList(affiliateSeed!.list, publisherId);
       listPublisherId = publisherId;
@@ -885,6 +886,7 @@ Return ONLY the JSON object described above, populated for THIS email.`;
           listId = newList.id;
           listPublisherId = publisherId;
           listCategory = newList.category;
+          listWasCreated = true;
         } catch {
           // Name may already exist (race condition) — try to find it
           const found = await prisma.list.findFirst({ where: { name: { equals: detectedListName, mode: "insensitive" } } });
@@ -944,15 +946,26 @@ Return ONLY the JSON object described above, populated for THIS email.`;
           }
         }
       } else {
-        const newGuru = await prisma.guru.create({ data: { name: guruName } });
-        guruIds.push(newGuru.id);
-        if (listId && !isAffiliateSeed) {
-          // Check if this new guru was pre-rejected for this list
+        // Guardrail (2026-08): a brand-new byline name is far more often a guest /
+        // contributor / secondary voice than a genuine new PRIMARY editor. Two rules,
+        // both to stop the flood of secondary voices being auto-created as gurus:
+        //   1. Only mint a new guru when THIS pass also created a brand-new list — a
+        //      strong signal of a real new publication whose author is worth capturing.
+        //      A new name that shows up in an *existing* list's email is treated as a
+        //      mention only (no guru record), never auto-promoted to a guru.
+        //   2. Even then, default the new guru to a SECONDARY voice. Secondary voices
+        //      are never auto-tagged on emails (see the isSecondaryVoice skip above), so
+        //      it won't pollute anything — the user promotes real primaries by hand.
+        if (listWasCreated && listId && !isAffiliateSeed) {
+          const newGuru = await prisma.guru.create({ data: { name: guruName, isSecondaryVoice: true } });
+          // Associate with the list it was discovered on (for review), unless pre-rejected.
           const rejected = await prisma.guruList.findUnique({ where: { guruId_listId: { guruId: newGuru.id, listId } } });
           if (!rejected?.isIgnored) {
             await prisma.guruList.upsert({ where: { guruId_listId: { guruId: newGuru.id, listId } }, update: {}, create: { guruId: newGuru.id, listId, isPrimary: false } });
           }
         }
+        // Otherwise: do NOT create a guru — an unknown name in an existing list is just
+        // a mention. (Was: always minted a new primary guru + tagged the email.)
       }
     }
 
