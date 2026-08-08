@@ -906,6 +906,27 @@ Return ONLY the JSON object described above, populated for THIS email.`;
       isAffiliateSeed ||
       listCategory === "MARKETING_FILE" ||
       resolvedPublisherType === "AFFILIATE_MARKETER";
+
+    // A brand-new list needs a primary editor. Decide up-front whether this email gives
+    // us a *clear* one: THIS pass created the list, no existing primary is detected among
+    // the byline names, and there is exactly one genuinely-unknown author (unambiguous).
+    // If it's unclear — an existing primary is already present, or multiple unknown names —
+    // we skip creating anyone ("skip if unclear"); the name is treated as a mention only.
+    const detectedGuruNames = isMarketingFile ? [] : (result.gurus ?? []);
+    const anyExistingPrimaryDetected = detectedGuruNames.some(n => {
+      const g = gurus.find(x => x.name.toLowerCase() === n.toLowerCase());
+      return (!!g && !g.isSecondaryVoice) || (secondaryToPrimary.get(n.toLowerCase())?.length ?? 0) > 0;
+    });
+    const unknownGuruNames = detectedGuruNames.filter(n =>
+      !gurus.some(x => x.name.toLowerCase() === n.toLowerCase()) &&
+      !secondaryToPrimary.has(n.toLowerCase()) &&
+      !ignoredGuruNames.has(n.toLowerCase())
+    );
+    const newPrimaryName =
+      listWasCreated && !anyExistingPrimaryDetected && unknownGuruNames.length === 1
+        ? unknownGuruNames[0].toLowerCase()
+        : null;
+
     const guruIds: string[] = [];
     for (const guruName of (isMarketingFile ? [] : (result.gurus ?? []))) {
       if (ignoredGuruNames.has(guruName.toLowerCase())) continue;
@@ -946,26 +967,22 @@ Return ONLY the JSON object described above, populated for THIS email.`;
           }
         }
       } else {
-        // Guardrail (2026-08): a brand-new byline name is far more often a guest /
-        // contributor / secondary voice than a genuine new PRIMARY editor. Two rules,
-        // both to stop the flood of secondary voices being auto-created as gurus:
-        //   1. Only mint a new guru when THIS pass also created a brand-new list — a
-        //      strong signal of a real new publication whose author is worth capturing.
-        //      A new name that shows up in an *existing* list's email is treated as a
-        //      mention only (no guru record), never auto-promoted to a guru.
-        //   2. Even then, default the new guru to a SECONDARY voice. Secondary voices
-        //      are never auto-tagged on emails (see the isSecondaryVoice skip above), so
-        //      it won't pollute anything — the user promotes real primaries by hand.
-        if (listWasCreated && listId && !isAffiliateSeed) {
-          const newGuru = await prisma.guru.create({ data: { name: guruName, isSecondaryVoice: true } });
-          // Associate with the list it was discovered on (for review), unless pre-rejected.
+        // Guardrail (2026-08): an unknown byline name is usually a guest / one-off
+        // mention, not a real editor — so by default we do NOT mint a guru from it
+        // (that flood of misclassified voices was the problem). The ONE exception: a
+        // brand-new list needs a primary editor. When THIS pass created the list, no
+        // existing primary was detected, and there's exactly one unknown author
+        // (see newPrimaryName), we promote that author to the list's PRIMARY editor.
+        // Everything else is skipped — treated as a mention only ("skip if unclear").
+        if (listWasCreated && listId && !isAffiliateSeed && newPrimaryName && guruName.toLowerCase() === newPrimaryName) {
+          const newGuru = await prisma.guru.create({ data: { name: guruName, isSecondaryVoice: false } });
+          guruIds.push(newGuru.id);
           const rejected = await prisma.guruList.findUnique({ where: { guruId_listId: { guruId: newGuru.id, listId } } });
           if (!rejected?.isIgnored) {
-            await prisma.guruList.upsert({ where: { guruId_listId: { guruId: newGuru.id, listId } }, update: {}, create: { guruId: newGuru.id, listId, isPrimary: false } });
+            await prisma.guruList.upsert({ where: { guruId_listId: { guruId: newGuru.id, listId } }, update: {}, create: { guruId: newGuru.id, listId, isPrimary: true } });
           }
         }
-        // Otherwise: do NOT create a guru — an unknown name in an existing list is just
-        // a mention. (Was: always minted a new primary guru + tagged the email.)
+        // Otherwise: do NOT create a guru — unknown/ambiguous name is just a mention.
       }
     }
 
