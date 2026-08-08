@@ -57,6 +57,15 @@ export default function ListsManager({ lists: initial, publishers, primaryGurus 
     setLoading(null);
   }
 
+  async function removeEditor(listId: string, guruId: string, guruName: string) {
+    if (!confirm(`Remove "${guruName}" as an editor of this list? The AI will learn not to re-add them on future syncs.`)) return;
+    setLoading(listId);
+    // Soft-remove: marks the guru↔list link isIgnored so the sync won't re-tag it.
+    await fetch(`/api/gurus/${guruId}/lists`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listId }) });
+    setLists(lists.map(l => l.id === listId ? { ...l, gurus: l.gurus.filter(g => g.guru.id !== guruId) } : l));
+    setLoading(null);
+  }
+
   async function toggleIgnore(list: ListItem) {
     setLoading(list.id);
     const res = await fetch(`/api/lists/${list.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isIgnored: !list.isIgnored }) });
@@ -201,6 +210,21 @@ export default function ListsManager({ lists: initial, publishers, primaryGurus 
                       <input value={editForm.dedicatedPubCode} onChange={e => setEditForm({ ...editForm, dedicatedPubCode: e.target.value })} placeholder="e.g. promo / lift-note code" className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:border-amber-500" />
                     </div>
                   </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wide text-gray-500 mb-1">Editors</label>
+                  {list.gurus.filter(g => !g.guru.isIgnored).length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {list.gurus.filter(g => !g.guru.isIgnored).map(g => (
+                        <span key={g.guru.id} className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-gray-300">
+                          {g.guru.name}
+                          <button type="button" onClick={() => removeEditor(list.id, g.guru.id, g.guru.name)} disabled={loading === list.id} title="Remove editor (AI learns not to re-add)" className="text-gray-500 hover:text-red-400 disabled:opacity-40"><X className="w-3 h-3" /></button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-600">No editors linked.</p>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => saveEdit(list.id)} disabled={loading === list.id} className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black text-xs font-medium rounded"><Check className="w-3 h-3" />Save</button>

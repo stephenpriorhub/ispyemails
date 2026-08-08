@@ -1,4 +1,4 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, ChevronRight } from "lucide-react";
 
 interface SilentItem { id: string; name: string; lastEmail: Date | string | null }
 
@@ -19,20 +19,21 @@ function daysAgo(date: Date | string | null): string {
 export default function WentSilent({ items, entity }: { items: SilentItem[]; entity: string }) {
   if (items.length === 0) return null;
   return (
-    <div className="mt-10 border-t border-gray-800 pt-4">
-      <div className="flex items-center gap-2 mb-2">
+    <details className="group mt-10 border-t border-gray-800 pt-4">
+      <summary className="flex items-center gap-2 mb-2 cursor-pointer list-none select-none">
+        <ChevronRight className="w-3.5 h-3.5 text-gray-600 transition-transform group-open:rotate-90" />
         <AlertTriangle className="w-3.5 h-3.5 text-gray-600" />
         <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide">
           Went silent — no emails in 6+ days ({items.length} {entity})
         </h3>
-      </div>
-      <div className="flex flex-wrap gap-x-4 gap-y-1">
+      </summary>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 pl-5">
         {items.map(i => (
           <span key={i.id} className="text-xs text-gray-500">
             {i.name}<span className="text-gray-600 ml-1">· {daysAgo(i.lastEmail)}</span>
           </span>
         ))}
       </div>
-    </div>
+    </details>
   );
 }
