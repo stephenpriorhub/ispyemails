@@ -39,7 +39,7 @@ export async function runDigest(day: string) {
 
   try {
     const digest = await buildDigest(day);
-    const slack = await postToSlack(digest.text);
+    const slack = await postToSlack(digest.text, digest.blocks);
     await prisma.promoJobRun.update({
       where: { id: run.id },
       data: {

@@ -23,8 +23,27 @@ export interface Digest {
   day: string;
   sections: DigestSection[];
   totalPromos: number;
+  /** Plain-text rendering, for the in-app preview and the stored run record. */
   text: string;
+  /** Slack Block Kit rendering — headers and dividers, as the bot posts today. */
+  blocks: SlackBlock[];
 }
+
+export type SlackBlock =
+  | { type: "header"; text: { type: "plain_text"; text: string; emoji: true } }
+  | { type: "divider" }
+  | { type: "section"; text: { type: "mrkdwn"; text: string } };
+
+const INTRO = "Here are the promos that are being pushed around the industry";
+
+/** Empty sections still appear, so the report reads the same shape every day. */
+const EMPTY_NOTE: Record<string, string> = {
+  "New External Promos Detected Yesterday": "_No new external promos detected yesterday._",
+  "Previously Detected External Promos (Promoted Yesterday)":
+    "_No previously detected external promos were promoted yesterday._",
+  "Lead-Gen Offers (Non-VSL)": "_No lead-gen offers detected yesterday._",
+  "Oxford Promos Sent Yesterday": "_No Oxford promos sent yesterday._",
+};
 
 export async function buildDigest(day: string): Promise<Digest> {
   const date = dayDate(day);
@@ -102,15 +121,24 @@ export async function buildDigest(day: string): Promise<Digest> {
     { title: "Oxford Promos Sent Yesterday", groups: group(reportable.filter((r) => r.isInternal)) },
   ];
 
-  return { day, sections, totalPromos: reportable.length, text: renderText(day, sections) };
+  return {
+    day,
+    sections,
+    totalPromos: reportable.length,
+    text: renderText(day, sections),
+    blocks: renderBlocks(sections),
+  };
 }
 
 function renderText(day: string, sections: DigestSection[]): string {
-  const out: string[] = [`*iSpyFinpub — Promo Report for ${formatDay(day)}*`];
+  const out: string[] = [INTRO, `(${formatDay(day)})`];
 
   for (const section of sections) {
-    if (!section.groups.length) continue;
-    out.push("", `*${section.title}*`);
+    out.push("", `── ${section.title} ──`);
+    if (!section.groups.length) {
+      out.push(EMPTY_NOTE[section.title] ?? "Nothing detected yesterday.");
+      continue;
+    }
     for (const g of section.groups) {
       out.push("", g.advertiser);
       for (const line of g.lines) {
@@ -121,9 +149,60 @@ function renderText(day: string, sections: DigestSection[]): string {
       }
     }
   }
-
-  if (sections.every((s) => !s.groups.length)) out.push("", "_No promos detected._");
   return out.join("\n");
+}
+
+/** Slack mrkdwn escaping — only the three characters Slack treats specially. */
+const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+function renderLine(line: DigestLine): string {
+  const days = line.daysDetected > 1 ? `   (${line.daysDetected} Days Detected)` : "";
+  const via = line.mailers.length ? `  _via ${esc(line.mailers.join(", "))}_` : "";
+  return `==> ${esc(line.headline)} - ${esc(line.advertiser)}${days}${via}\n${line.url}`;
+}
+
+function renderBlocks(sections: DigestSection[]): SlackBlock[] {
+  const blocks: SlackBlock[] = [{ type: "section", text: { type: "mrkdwn", text: INTRO } }];
+
+  for (const section of sections) {
+    blocks.push({ type: "header", text: { type: "plain_text", text: section.title.slice(0, 150), emoji: true } });
+    blocks.push({ type: "divider" });
+
+    if (!section.groups.length) {
+      blocks.push({
+        type: "section",
+        text: { type: "mrkdwn", text: EMPTY_NOTE[section.title] ?? "_Nothing detected yesterday._" },
+      });
+      continue;
+    }
+
+    for (const g of section.groups) {
+      // One block per advertiser keeps the block count well inside Slack's
+      // limit, and keeps a publisher's promos visually together.
+      const body = `*${esc(g.advertiser)}*\n\n${g.lines.map(renderLine).join("\n\n")}`;
+      for (const chunk of splitForSlack(body)) {
+        blocks.push({ type: "section", text: { type: "mrkdwn", text: chunk } });
+      }
+    }
+  }
+  return blocks;
+}
+
+/** A section block caps at 3000 characters. */
+function splitForSlack(text: string, limit = 2900): string[] {
+  if (text.length <= limit) return [text];
+  const out: string[] = [];
+  let current = "";
+  for (const para of text.split("\n\n")) {
+    if (current && current.length + para.length + 2 > limit) {
+      out.push(current);
+      current = para;
+    } else {
+      current = current ? `${current}\n\n${para}` : para;
+    }
+  }
+  if (current) out.push(current);
+  return out;
 }
 
 function formatDay(day: string): string {
