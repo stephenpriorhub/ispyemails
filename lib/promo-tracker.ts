@@ -99,15 +99,24 @@ async function advertiserFor(dest: Destination, publishers: PublisherLite[]): Pr
   const domain = dest.rootDomain;
   const existing = await prisma.promoAdvertiser.findUnique({
     where: { domain },
-    select: { id: true, label: true, labelConfirmed: true },
+    select: { id: true, label: true, labelConfirmed: true, isPlatform: true },
   });
   if (existing) {
-    // A later promo on the same domain may expose a real brand name where the
-    // first one only gave us a squashed domain. Take the upgrade — but never
-    // over a label a human has set.
-    if (!existing.labelConfirmed && !dest.isPlatform && dest.siteName && dest.siteName !== existing.label) {
-      const derived = advertiserLabelFromDomain(dest.host);
-      if (existing.label === derived) {
+    if (dest.isPlatform) {
+      // The domain hosts other people's funnels. Whatever we called it before —
+      // including a mailer credit an earlier version invented — the honest label
+      // is the platform itself, with the real name carried per-promo.
+      if (!existing.isPlatform || (!existing.labelConfirmed && existing.label !== domain)) {
+        await prisma.promoAdvertiser.update({
+          where: { id: existing.id },
+          data: { isPlatform: true, ...(existing.labelConfirmed ? {} : { label: domain }) },
+        });
+      }
+    } else if (!existing.labelConfirmed && dest.siteName && dest.siteName !== existing.label) {
+      // A later promo on the same domain may expose a real brand name where the
+      // first only gave us a squashed domain. Take the upgrade — never over a
+      // label a human has set.
+      if (existing.label === advertiserLabelFromDomain(dest.host)) {
         await prisma.promoAdvertiser.update({ where: { id: existing.id }, data: { label: dest.siteName } });
       }
     }

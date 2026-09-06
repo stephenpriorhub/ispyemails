@@ -212,6 +212,17 @@ export default function PromoFeed({ publishers, lists, isAdmin }: Props) {
   );
 }
 
+const KIND_STYLE: Record<string, string> = {
+  VSL: "bg-gray-800 text-gray-400",
+  LEAD_GEN: "bg-blue-500/15 text-blue-300",
+  EQUITY_RAISE: "bg-gray-700 text-gray-300",
+};
+const KIND_LABEL: Record<string, string> = {
+  VSL: "VSL",
+  LEAD_GEN: "lead-gen",
+  EQUITY_RAISE: "equity raise",
+};
+
 const selectCls =
   "px-2.5 py-1.5 bg-gray-900 border border-gray-800 rounded-md text-sm text-gray-300 focus:outline-none focus:border-amber-500/50";
 
@@ -254,6 +265,16 @@ function PromoRow({
     } finally {
       setBusy(false);
     }
+  }
+
+  async function saveKind(kind: string) {
+    if (kind === promo.kind) return;
+    onChange(promo.id, { kind });
+    await fetch(`/api/promos/${promo.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind }),
+    });
   }
 
   async function saveAdvertiser(advertiser: string) {
@@ -320,15 +341,23 @@ function PromoRow({
                 unattributed
               </span>
             )}
-            {promo.kind === "LEAD_GEN" && (
-              <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-500/15 text-blue-300" title="Non-VSL page capturing name, email and/or phone">
-                lead-gen
-              </span>
-            )}
-            {promo.kind === "EQUITY_RAISE" && (
-              <span className="px-1.5 py-0.5 rounded text-[10px] bg-gray-700 text-gray-300" title="A startup raise bought on a finpub list — not a competitor offer">
-                equity raise
-              </span>
+            {isAdmin ? (
+              <select
+                value={promo.kind}
+                onChange={(e) => saveKind(e.target.value)}
+                title="How this page was classified — correct it if the automatic read is wrong"
+                className={`rounded text-[10px] border-0 py-0.5 pl-1.5 pr-4 cursor-pointer focus:outline-none ${KIND_STYLE[promo.kind] ?? KIND_STYLE.VSL}`}
+              >
+                <option value="VSL">VSL</option>
+                <option value="LEAD_GEN">lead-gen</option>
+                <option value="EQUITY_RAISE">equity raise</option>
+              </select>
+            ) : (
+              promo.kind !== "VSL" && (
+                <span className={`px-1.5 py-0.5 rounded text-[10px] ${KIND_STYLE[promo.kind]}`}>
+                  {KIND_LABEL[promo.kind]}
+                </span>
+              )
             )}
             {promo.isNew && (
               <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/15 text-amber-400">
