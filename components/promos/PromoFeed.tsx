@@ -329,15 +329,18 @@ function PromoRow({
             {promo.displayUrl.length > 110 ? `${promo.displayUrl.slice(0, 110)}…` : promo.displayUrl}
           </a>
 
+          {/* One chip per list, not per send — an affiliate file can mail the
+              same promo six times in a day. */}
           <div className="flex flex-wrap gap-1.5 mt-2">
-            {promo.mailers.map((m) => (
+            {dedupeMailers(promo.mailers).map(({ mailer, count, subjects }) => (
               <Link
-                key={m.emailId}
-                href={`/emails/${m.emailId}`}
-                title={m.subject}
+                key={mailer.emailId}
+                href={`/emails/${mailer.emailId}`}
+                title={subjects.join("\n")}
                 className="px-1.5 py-0.5 rounded text-[10px] bg-gray-800/70 text-gray-400 hover:text-amber-400"
               >
-                {m.list ?? m.publisher}
+                {mailer.list ?? mailer.publisher}
+                {count > 1 && <span className="text-gray-600"> ×{count}</span>}
               </Link>
             ))}
           </div>
@@ -381,6 +384,21 @@ function PromoRow({
       </div>
     </div>
   );
+}
+
+function dedupeMailers(mailers: Mailer[]) {
+  const byName = new Map<string, { mailer: Mailer; count: number; subjects: string[] }>();
+  for (const m of mailers) {
+    const name = m.list ?? m.publisher;
+    const entry = byName.get(name);
+    if (entry) {
+      entry.count++;
+      if (entry.subjects.length < 8) entry.subjects.push(m.subject);
+    } else {
+      byName.set(name, { mailer: m, count: 1, subjects: [m.subject] });
+    }
+  }
+  return [...byName.values()];
 }
 
 function formatDay(day: string): string {
