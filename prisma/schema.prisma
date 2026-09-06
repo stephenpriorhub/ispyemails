@@ -359,6 +359,9 @@ model PromoAdvertiser {
   domain         String     @unique // registrable domain of the landing page
   label          String // display name; auto-derived, human-editable
   labelConfirmed Boolean    @default(false)
+  /// The domain hosts other people's funnels (Zoom, Infusionsoft, a webinar
+  /// platform), so it names the tooling and never the advertiser.
+  isPlatform     Boolean    @default(false)
   publisherId    String?
   publisher      Publisher? @relation(fields: [publisherId], references: [id], onDelete: SetNull)
   isInternal     Boolean    @default(false) // an Oxford Group / MTA property
@@ -381,6 +384,13 @@ model Promo {
   headlineSource String? // PAGE_H1 | PAGE_OG | PAGE_TITLE | SUBJECT | MANUAL
   lastStatus     Int? // HTTP status of the last resolution (403 = Cloudflare-gated)
 
+  /// VSL | LEAD_GEN | EQUITY_RAISE — EQUITY_RAISE is a startup raise bought on a
+  /// finpub list (Doroni, Kara Water), not a competitor's offer.
+  kind            String  @default("VSL")
+  /// Per-promo advertiser, for platform-hosted pages whose domain names no one.
+  /// Overrides the advertiser label for this promo only.
+  advertiserLabel String?
+
   firstSeenOn  DateTime @db.Date
   lastSeenOn   DateTime @db.Date
   daysDetected Int      @default(1)
@@ -400,6 +410,7 @@ model Promo {
 
   @@index([lastSeenOn])
   @@index([advertiserId])
+  @@index([kind])
 }
 
 /// One promo appearing in one email. The feed is built from these, so a promo

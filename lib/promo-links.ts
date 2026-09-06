@@ -381,6 +381,58 @@ const PLATFORM_HOSTS = [
   "infusionsoft.com", "keap.com", "clickfunnels.com", "kartra.com", "activehosted.com", "hubspot.com",
 ];
 
+export type PromoKind = "VSL" | "LEAD_GEN" | "EQUITY_RAISE";
+
+const VIDEO_MARKERS =
+  /vidalytics|wistia|jwplayer|jwplatform|vturb|<video[\s>]|youtube\.com\/embed|youtu\.be\/|player\.vimeo|brightcove|\.m3u8|videoDelivery/i;
+const EMAIL_INPUT = /<input[^>]+(type=["']email["']|name=["'][^"']*e-?mail)/i;
+const PHONE_INPUT = /<input[^>]+(type=["']tel["']|name=["'][^"']*(phone|mobile))/i;
+const NAME_INPUT = /<input[^>]+name=["'][^"']*(first_?name|fname|full_?name|last_?name)/i;
+/// Reg A+ / Reg CF startup raises bought on finpub lists — not a competitor's offer.
+const EQUITY_MARKERS =
+  /reg\s?(a\+?|cf)\b|start\s?engine|wefunder|republic\.co|offering circular|testing the waters|minimum investment|form c\b|securities offering|invest in (us|our)\b/i;
+/// Webinar registration always captures a name and email, whatever the page renders.
+const WEBINAR_REGISTRATION = /\/webinar\/register|\/webinar-registration|demio\.com|webinarjam|everwebinar|gotowebinar|joinnow\.live/i;
+
+function visibleWordCount(html: string): number {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .split(/\s+/)
+    .filter(Boolean).length;
+}
+
+/**
+ * Which bucket a landing page belongs to.
+ *
+ * Deliberately conservative: VSL is the default, and LEAD_GEN is only claimed
+ * when an opt-in form is actually visible in the HTML. Many VSL pages are
+ * JavaScript shells we can't see into, so guessing from their absence of a
+ * video would misfile them.
+ */
+export function classifyPage(finalUrl: string, html: string | null): PromoKind {
+  const host = (() => {
+    try {
+      return new URL(finalUrl).hostname.toLowerCase();
+    } catch {
+      return "";
+    }
+  })();
+
+  if (host.startsWith("invest.")) return "EQUITY_RAISE";
+  if (WEBINAR_REGISTRATION.test(finalUrl)) return "LEAD_GEN";
+  if (!html) return "VSL";
+  if (EQUITY_MARKERS.test(html)) return "EQUITY_RAISE";
+  if (VIDEO_MARKERS.test(html)) return "VSL";
+
+  // "asking for name, email and/or phone number" — any one of them counts.
+  const hasOptIn = EMAIL_INPUT.test(html) || PHONE_INPUT.test(html) || NAME_INPUT.test(html);
+  // Require real rendered copy — a JS shell tells us nothing either way.
+  if (hasOptIn && visibleWordCount(html) >= 100) return "LEAD_GEN";
+  return "VSL";
+}
+
 export interface Destination {
   url: string;
   canonicalKey: string;
@@ -388,6 +440,7 @@ export interface Destination {
   rootDomain: string;
   status: number;
   isPlatform: boolean;
+  kind: PromoKind;
   headline: string | null;
   headlineSource: PageInfo["headlineSource"];
   siteName: string | null;
@@ -416,11 +469,19 @@ export async function resolveEmailDestinations(
   {
     maxResolves = 8,
     excludeRootDomains = [],
+    excludeBrands = [],
     timeoutMs = 20_000,
-  }: { maxResolves?: number; excludeRootDomains?: string[]; timeoutMs?: number } = {},
+  }: {
+    maxResolves?: number;
+    excludeRootDomains?: string[];
+    /// Brand slugs (e.g. "marketbeat") whose own pages are never the promo.
+    excludeBrands?: string[];
+    timeoutMs?: number;
+  } = {},
 ): Promise<Destination[]> {
   const candidates = extractCandidateLinks(bodyHtml, maxResolves + 4);
   const excluded = new Set(excludeRootDomains.map((d) => d.toLowerCase()));
+  const excludedBrands = new Set(excludeBrands.map((b) => b.toLowerCase().replace(/[^a-z0-9]/g, "")).filter(Boolean));
   const byKey = new Map<string, Destination>();
   const seenRoots = new Set<string>();
   let resolves = 0;
@@ -440,6 +501,8 @@ export async function resolveEmailDestinations(
     }
     const root = rootDomain(host);
     if (excluded.has(root)) continue;
+    // MarketBeat's own newsletter offers are house ads, not the advertiser's promo.
+    if (excludedBrands.has(root.replace(/\.[a-z.]+$/, "").replace(/[^a-z0-9]/g, ""))) continue;
 
     const key = canonicalKey(res.finalUrl);
     if (byKey.has(key)) continue;
@@ -460,6 +523,7 @@ export async function resolveEmailDestinations(
       rootDomain: root,
       status: res.status,
       isPlatform: PLATFORM_HOSTS.some((p) => host === p || host.endsWith(`.${p}`)),
+      kind: classifyPage(res.finalUrl, res.html),
       headline: page.headline,
       headlineSource: page.headlineSource,
       siteName: page.siteName,

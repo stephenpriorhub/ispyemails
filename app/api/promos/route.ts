@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
   const listId = sp.get("list");
   const advertiserId = sp.get("advertiser");
   const scope = sp.get("scope"); // external | internal | all
+  const kind = sp.get("kind"); // VSL | LEAD_GEN | EQUITY_RAISE
   const q = sp.get("q");
 
   const where: Prisma.PromoSightingWhereInput = {};
@@ -27,10 +28,13 @@ export async function GET(req: NextRequest) {
   if (listId) where.listId = listId;
   const promoFilter: Prisma.PromoWhereInput = {};
   if (advertiserId) promoFilter.advertiserId = advertiserId;
+  if (kind) promoFilter.kind = kind;
+  // Equity raises are noise in the default view — surfaced only when asked for.
+  else promoFilter.kind = { not: "EQUITY_RAISE" };
   if (scope === "external" || scope === "internal") {
     promoFilter.advertiser = { isInternal: scope === "internal" };
   }
-  if (Object.keys(promoFilter).length) where.promo = promoFilter;
+  where.promo = promoFilter;
   if (q) {
     where.OR = [
       { subject: { contains: q, mode: "insensitive" } },
@@ -57,7 +61,7 @@ export async function GET(req: NextRequest) {
       publisher: { select: { id: true, name: true, type: true } },
       list: { select: { id: true, name: true, category: true } },
       promo: {
-        include: { advertiser: { select: { id: true, label: true, domain: true, isInternal: true } } },
+        include: { advertiser: { select: { id: true, label: true, domain: true, isInternal: true, isPlatform: true } } },
       },
     },
     orderBy: [{ day: "desc" }, { createdAt: "asc" }],
@@ -85,6 +89,8 @@ export async function GET(req: NextRequest) {
     cards.set(s.promoId, {
       id: s.promo.id,
       headline: s.promo.headline,
+      kind: s.promo.kind,
+      advertiserLabelOverride: s.promo.advertiserLabel,
       headlineSource: s.promo.headlineSource,
       url: s.promo.landingUrl,
       displayUrl: s.promo.canonicalKey,
@@ -115,12 +121,14 @@ export async function GET(req: NextRequest) {
 interface PromoCard {
   id: string;
   headline: string | null;
+  kind: string;
+  advertiserLabelOverride: string | null;
   headlineSource: string | null;
   url: string;
   displayUrl: string;
   host: string;
   lastStatus: number | null;
-  advertiser: { id: string; label: string; domain: string; isInternal: boolean };
+  advertiser: { id: string; label: string; domain: string; isInternal: boolean; isPlatform: boolean };
   daysDetected: number;
   firstSeenOn: string;
   isNew: boolean;

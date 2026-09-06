@@ -40,6 +40,8 @@ export async function buildDigest(day: string): Promise<Digest> {
           headline: true,
           landingUrl: true,
           canonicalKey: true,
+          kind: true,
+          advertiserLabel: true,
           daysDetected: true,
           firstSeenOn: true,
           advertiser: { select: { label: true, isInternal: true } },
@@ -49,7 +51,7 @@ export async function buildDigest(day: string): Promise<Digest> {
   });
 
   // Collapse to one line per promo, remembering who mailed it.
-  const byPromo = new Map<string, DigestLine & { isInternal: boolean; isNew: boolean }>();
+  const byPromo = new Map<string, DigestLine & { isInternal: boolean; isNew: boolean; kind: string }>();
   for (const s of sightings) {
     const p = s.promo;
     const mailer = s.list?.name ?? s.publisher?.name ?? "Unknown";
@@ -60,12 +62,15 @@ export async function buildDigest(day: string): Promise<Digest> {
     }
     byPromo.set(p.id, {
       headline: p.headline ?? "(no headline)",
-      advertiser: p.advertiser.label,
+      // A per-promo name wins: on a platform domain the advertiser row can only
+      // ever name the tooling.
+      advertiser: p.advertiserLabel ?? p.advertiser.label,
       url: `https://${p.canonicalKey}`, // tracking params stripped
       daysDetected: p.daysDetected,
       mailers: [mailer],
       isInternal: p.advertiser.isInternal,
       isNew: p.firstSeenOn.getTime() === date.getTime(),
+      kind: p.kind,
     });
   }
 
@@ -81,16 +86,23 @@ export async function buildDigest(day: string): Promise<Digest> {
       .map(([advertiser, lines]) => ({ advertiser, lines }));
   };
 
+  // Startup raises bought on finpub lists (Doroni, Kara Water) aren't competitor
+  // offers — they stay on the page behind a filter but out of the report.
+  const reportable = all.filter((r) => r.kind !== "EQUITY_RAISE");
+  const external = reportable.filter((r) => !r.isInternal);
+  const vsl = external.filter((r) => r.kind !== "LEAD_GEN");
+
   const sections: DigestSection[] = [
-    { title: "New External Promos Detected Yesterday", groups: group(all.filter((r) => !r.isInternal && r.isNew)) },
+    { title: "New External Promos Detected Yesterday", groups: group(vsl.filter((r) => r.isNew)) },
     {
       title: "Previously Detected External Promos (Promoted Yesterday)",
-      groups: group(all.filter((r) => !r.isInternal && !r.isNew)),
+      groups: group(vsl.filter((r) => !r.isNew)),
     },
-    { title: "Oxford Promos Sent Yesterday", groups: group(all.filter((r) => r.isInternal)) },
+    { title: "Lead-Gen Offers (Non-VSL)", groups: group(external.filter((r) => r.kind === "LEAD_GEN")) },
+    { title: "Oxford Promos Sent Yesterday", groups: group(reportable.filter((r) => r.isInternal)) },
   ];
 
-  return { day, sections, totalPromos: all.length, text: renderText(day, sections) };
+  return { day, sections, totalPromos: reportable.length, text: renderText(day, sections) };
 }
 
 function renderText(day: string, sections: DigestSection[]): string {

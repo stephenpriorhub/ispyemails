@@ -95,11 +95,7 @@ export function etDayBounds(day: string): { start: Date; end: Date } {
 
 type PublisherLite = { id: string; name: string; type: string; domains: string[] };
 
-async function advertiserFor(
-  dest: Destination,
-  publishers: PublisherLite[],
-  mailerName: string | null,
-): Promise<string> {
+async function advertiserFor(dest: Destination, publishers: PublisherLite[]): Promise<string> {
   const domain = dest.rootDomain;
   const existing = await prisma.promoAdvertiser.findUnique({
     where: { domain },
@@ -109,7 +105,7 @@ async function advertiserFor(
     // A later promo on the same domain may expose a real brand name where the
     // first one only gave us a squashed domain. Take the upgrade — but never
     // over a label a human has set.
-    if (!existing.labelConfirmed && dest.siteName && dest.siteName !== existing.label) {
+    if (!existing.labelConfirmed && !dest.isPlatform && dest.siteName && dest.siteName !== existing.label) {
       const derived = advertiserLabelFromDomain(dest.host);
       if (existing.label === derived) {
         await prisma.promoAdvertiser.update({ where: { id: existing.id }, data: { label: dest.siteName } });
@@ -126,18 +122,16 @@ async function advertiserFor(
     publishers.find((p) => p.domains.some((d) => rootDomain(d) === domain)) ??
     publishers.find((p) => p.domains.some((d) => label2(d) && label2(d) === label2(domain)));
 
-  // Zoom/beehiiv/etc. host other people's funnels — the domain names nobody, so
-  // credit the mailer and let it be corrected in the UI.
-  const label = publisher?.name
-    ?? (dest.isPlatform && mailerName ? `${mailerName} (via ${domain})` : null)
-    ?? dest.siteName
-    ?? advertiserLabelFromDomain(dest.host);
+  // Zoom/Infusionsoft/etc. host other people's funnels. Crediting the mailer
+  // there is worse than admitting we don't know — it asserts an advertiser that
+  // isn't one. Label it by the platform and let the promo carry the real name.
+  const label = publisher?.name ?? (dest.isPlatform ? domain : (dest.siteName ?? advertiserLabelFromDomain(dest.host)));
 
   const isInternal = publisher?.type === "INTERNAL" || internalDomains().has(domain);
 
   const created = await prisma.promoAdvertiser
     .create({
-      data: { domain, label, publisherId: publisher?.id ?? null, isInternal },
+      data: { domain, label, publisherId: publisher?.id ?? null, isInternal, isPlatform: dest.isPlatform },
       select: { id: true },
     })
     .catch(async () => {
@@ -209,14 +203,17 @@ export async function scanDay(day: string, { force = false } = {}): Promise<Scan
             ].filter(Boolean)
           : [];
 
-        const dests = await resolveEmailDestinations(email.bodyHtml!, { excludeRootDomains: exclude });
+        const dests = await resolveEmailDestinations(email.bodyHtml!, {
+          excludeRootDomains: exclude,
+          excludeBrands: isAffiliateFile && email.publisher?.name ? [email.publisher.name] : [],
+        });
         const dest = dests[0];
         if (!dest) {
           result.unresolved++;
           continue;
         }
 
-        const advertiserId = await advertiserFor(dest, publishers, email.publisher?.name ?? null);
+        const advertiserId = await advertiserFor(dest, publishers);
         const headline = dest.headline ?? email.subject;
         const headlineSource = dest.headline ? dest.headlineSource : "SUBJECT";
 
@@ -238,6 +235,7 @@ export async function scanDay(day: string, { force = false } = {}): Promise<Scan
             data: {
               landingUrl: dest.url,
               lastStatus: dest.status,
+              kind: dest.kind,
               lastSeenOn: date > existing.lastSeenOn ? date : existing.lastSeenOn,
               firstSeenOn: date < existing.firstSeenOn ? date : existing.firstSeenOn,
               ...upgradeHeadline,
@@ -255,6 +253,7 @@ export async function scanDay(day: string, { force = false } = {}): Promise<Scan
                 headline,
                 headlineSource,
                 lastStatus: dest.status,
+                kind: dest.kind,
                 firstSeenOn: date,
                 lastSeenOn: date,
               },

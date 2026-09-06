@@ -22,7 +22,9 @@ interface Promo {
   displayUrl: string;
   host: string;
   lastStatus: number | null;
-  advertiser: { id: string; label: string; domain: string; isInternal: boolean };
+  advertiser: { id: string; label: string; domain: string; isInternal: boolean; isPlatform: boolean };
+  advertiserLabelOverride: string | null;
+  kind: string;
   daysDetected: number;
   firstSeenOn: string;
   isNew: boolean;
@@ -52,7 +54,7 @@ export default function PromoFeed({ publishers, lists, isAdmin }: Props) {
   const [cursor, setCursor] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState({ publisher: "", list: "", scope: "", q: "" });
+  const [filters, setFilters] = useState({ publisher: "", list: "", scope: "", kind: "", q: "" });
   const sentinel = useRef<HTMLDivElement>(null);
   const reqId = useRef(0);
 
@@ -63,6 +65,7 @@ export default function PromoFeed({ publishers, lists, isAdmin }: Props) {
       if (filters.publisher) p.set("publisher", filters.publisher);
       if (filters.list) p.set("list", filters.list);
       if (filters.scope) p.set("scope", filters.scope);
+      if (filters.kind) p.set("kind", filters.kind);
       if (filters.q) p.set("q", filters.q);
       return `/api/promos?${p.toString()}`;
     },
@@ -113,7 +116,7 @@ export default function PromoFeed({ publishers, lists, isAdmin }: Props) {
     );
 
   const set = (key: keyof typeof filters, value: string) => setFilters((f) => ({ ...f, [key]: value }));
-  const active = filters.publisher || filters.list || filters.scope || filters.q;
+  const active = filters.publisher || filters.list || filters.scope || filters.kind || filters.q;
 
   return (
     <div className="p-4 md:p-6 max-w-5xl">
@@ -158,9 +161,16 @@ export default function PromoFeed({ publishers, lists, isAdmin }: Props) {
           <option value="internal">Oxford Group only</option>
         </select>
 
+        <select value={filters.kind} onChange={(e) => set("kind", e.target.value)} className={selectCls}>
+          <option value="">Promos &amp; lead-gen</option>
+          <option value="VSL">VSL promos only</option>
+          <option value="LEAD_GEN">Lead-gen offers only</option>
+          <option value="EQUITY_RAISE">Equity raises (hidden by default)</option>
+        </select>
+
         {active && (
           <button
-            onClick={() => setFilters({ publisher: "", list: "", scope: "", q: "" })}
+            onClick={() => setFilters({ publisher: "", list: "", scope: "", kind: "", q: "" })}
             className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-gray-400 hover:text-gray-200 border border-gray-800 rounded-md"
           >
             <X className="w-3 h-3" /> Clear
@@ -214,6 +224,8 @@ function PromoRow({
 }) {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [editingAdvertiser, setEditingAdvertiser] = useState(false);
+  const advertiserName = promo.advertiserLabelOverride ?? promo.advertiser.label;
   const status = promo.vidripperStatus;
   const inFlight = status === "ripping" || status === "transcribing" || status === "analyzing";
 
@@ -244,6 +256,19 @@ function PromoRow({
     }
   }
 
+  async function saveAdvertiser(advertiser: string) {
+    setEditingAdvertiser(false);
+    if (!advertiser.trim() || advertiser === advertiserName) return;
+    onChange(promo.id, promo.advertiser.isPlatform
+      ? { advertiserLabelOverride: advertiser }
+      : { advertiser: { ...promo.advertiser, label: advertiser } });
+    await fetch(`/api/promos/${promo.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ advertiser }),
+    });
+  }
+
   async function saveHeadline(headline: string) {
     setEditing(false);
     if (!headline.trim() || headline === promo.headline) return;
@@ -260,9 +285,51 @@ function PromoRow({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className={`text-xs font-medium ${promo.advertiser.isInternal ? "text-green-400" : "text-gray-300"}`}>
-              {promo.advertiser.label}
-            </span>
+            {editingAdvertiser ? (
+              <input
+                autoFocus
+                defaultValue={advertiserName}
+                onBlur={(e) => saveAdvertiser(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                  if (e.key === "Escape") setEditingAdvertiser(false);
+                }}
+                className="px-1.5 py-0.5 bg-gray-950 border border-amber-500/40 rounded text-xs text-white focus:outline-none"
+              />
+            ) : (
+              <button
+                onClick={() => isAdmin && setEditingAdvertiser(true)}
+                disabled={!isAdmin}
+                title={
+                  promo.advertiser.isPlatform
+                    ? `Hosted on ${promo.advertiser.domain}, which names no advertiser — set who this promo is actually from`
+                    : `Rename ${promo.advertiser.domain} everywhere`
+                }
+                className={`text-xs font-medium ${
+                  promo.advertiser.isInternal ? "text-green-400" : "text-gray-300"
+                } ${isAdmin ? "hover:text-amber-400" : "cursor-default"}`}
+              >
+                {advertiserName}
+              </button>
+            )}
+            {promo.advertiser.isPlatform && !promo.advertiserLabelOverride && (
+              <span
+                className="px-1.5 py-0.5 rounded text-[10px] bg-purple-500/15 text-purple-300"
+                title="The landing page is on a shared platform, so the advertiser can't be read from the domain"
+              >
+                unattributed
+              </span>
+            )}
+            {promo.kind === "LEAD_GEN" && (
+              <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-500/15 text-blue-300" title="Non-VSL page capturing name, email and/or phone">
+                lead-gen
+              </span>
+            )}
+            {promo.kind === "EQUITY_RAISE" && (
+              <span className="px-1.5 py-0.5 rounded text-[10px] bg-gray-700 text-gray-300" title="A startup raise bought on a finpub list — not a competitor offer">
+                equity raise
+              </span>
+            )}
             {promo.isNew && (
               <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/15 text-amber-400">
                 <Sparkles className="w-2.5 h-2.5" /> NEW
