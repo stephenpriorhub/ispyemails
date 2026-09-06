@@ -22,6 +22,7 @@ const DEFAULT_INTERNAL_DOMAINS = [
   "mtatradeoftheday.com",
   "oxfordclub.com",
   "wealthyretirement.com",
+  "libertythroughwealth.com",
   "manwardpress.com",
 ];
 
@@ -165,6 +166,10 @@ export async function scanDay(day: string, { force = false } = {}): Promise<Scan
   const { start, end } = etDayBounds(day);
   const date = dayDate(day);
 
+  // A forced re-scan replaces the day rather than adding to it, so tightening
+  // the filters actually removes what a looser earlier pass let through.
+  if (force) await prisma.promoSighting.deleteMany({ where: { day: date } });
+
   const emails = await prisma.email.findMany({
     where: {
       receivedAt: { gte: start, lt: end },
@@ -292,15 +297,28 @@ export async function scanDay(day: string, { force = false } = {}): Promise<Scan
   });
 
   await Promise.all(workers);
+
+  // Promos whose every sighting has been re-scanned away are orphans now.
+  if (force) await prisma.promo.deleteMany({ where: { sightings: { none: {} } } });
+
   return result;
 }
 
-/** daysDetected is the count of distinct days the promo was mailed on. */
+/** Recompute the day span from the sightings that actually exist. */
 async function refreshDaysDetected(promoId: string): Promise<void> {
   const rows = await prisma.promoSighting.findMany({
     where: { promoId },
     select: { day: true },
     distinct: ["day"],
+    orderBy: { day: "asc" },
   });
-  await prisma.promo.update({ where: { id: promoId }, data: { daysDetected: rows.length } });
+  if (!rows.length) return;
+  await prisma.promo.update({
+    where: { id: promoId },
+    data: {
+      daysDetected: rows.length,
+      firstSeenOn: rows[0].day,
+      lastSeenOn: rows[rows.length - 1].day,
+    },
+  });
 }

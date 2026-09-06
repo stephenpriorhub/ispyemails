@@ -351,7 +351,7 @@ const NOT_A_PROMO_PATH = [
   /[-_/]order[-_/]/i, /order[-_]?form/i, /\/checkout/i, /\/cart\b/i, /\/upsell/i, /\/thank[-_]?you/i,
   /\/confirm(ation)?\b/i, /\/login\b/i, /\/account\b/i, /\/subscribe\b/i, /\/archive\b/i,
   /\/articles?\//i, /\/blog\//i, /\/contact/i, /\/careers/i, /\/faq\b/i,
-  /interstitial/i, /\/optout/i, /opt[-_]?out/i,
+  /interstitial/i, /\/optout/i, /opt[-_]?out/i, /whitelist/i, /\/homepage\b/i,
   /^\/j\/\d{9,}/, // zoom.us/j/<id> — a meeting invite, not a landing page
 ];
 
@@ -365,6 +365,8 @@ const NOT_A_PROMO_HEADLINE = [
   /privacy policy/i, /terms of (use|service)/i, /interstitial/i, /newsletterverwaltung/i,
   /preference cent(er|re)/i, /newsletter confirmation/i, /you (have )?been unsubscribed/i,
   /javascript is (disabled|required)/i, /enable javascript/i, /please wait/i,
+  /whitelist/i, /frequently asked questions/i, /^faq\b/i, /offers? manager/i,
+  /^(about|contact) /i, /restoring the lost art/i,
 ];
 
 /**
