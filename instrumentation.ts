@@ -105,6 +105,54 @@ export async function register() {
     console.log("[iSpyFinpub] Auto-sync started — every 3 hours");
   }, 10_000);
 
+  // ── Promo Radar ────────────────────────────────────────────────────────────
+  // Wall-clock ET rather than an interval: the report is "yesterday's promos",
+  // so it has to line up with calendar days, and a restart must not skip or
+  // repeat a run. A PromoJobRun row per (kind, day) makes that idempotent.
+  const PROMO_SCAN_ET_HOUR = 0;   // just after midnight ET — populates the page
+  const PROMO_DIGEST_ET_HOUR = 8; // 8am ET — the previous-day report
+  const TICK_MS = 5 * 60 * 1000;
+
+  async function promoTick() {
+    try {
+      const { prisma } = await import("@/lib/prisma");
+      const { etClock, etYesterday, scanDay } = await import("@/lib/promo-tracker");
+      const { hour, minute } = etClock();
+      const day = etYesterday();
+      const date = new Date(`${day}T00:00:00.000Z`);
+
+      const alreadyRan = async (kind: string) =>
+        Boolean(
+          await prisma.promoJobRun.findFirst({
+            where: { kind, day: date, status: { in: ["RUNNING", "OK"] } },
+            select: { id: true },
+          }),
+        );
+
+      // Midnight scan — resolve yesterday's promo links.
+      if (hour === PROMO_SCAN_ET_HOUR && minute >= 5 && !(await alreadyRan("SCAN"))) {
+        const { runScan } = await import("@/app/api/cron/promo-scan/route");
+        await runScan(day);
+      }
+
+      // 8am report. Re-scans first so anything that synced overnight is included
+      // — scanDay only looks at emails with no sighting yet, so this is cheap.
+      if (hour >= PROMO_DIGEST_ET_HOUR && !(await alreadyRan("DIGEST"))) {
+        await scanDay(day);
+        const { runDigest } = await import("@/app/api/cron/promo-digest/route");
+        await runDigest(day);
+      }
+    } catch (err) {
+      console.error("[iSpyFinpub] Promo tick failed:", err);
+    }
+  }
+
+  setTimeout(() => {
+    promoTick();
+    setInterval(promoTick, TICK_MS);
+    console.log("[iSpyFinpub] Promo Radar scheduler started — scan 00:05 ET, report 08:00 ET");
+  }, 60_000);
+
   // Brain sync — start after 30.5 minutes (offset from email sync), then every 6 hours
   setTimeout(() => {
     runBrainSync();

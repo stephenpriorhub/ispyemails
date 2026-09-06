@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Settings, Mail, CheckCircle, AlertCircle, Plus, Database, RefreshCw, Brain } from "lucide-react";
+import PromoAdmin from "@/components/promos/PromoAdmin";
 
 interface Account { email:string;isActive:boolean;lastSyncAt:Date|null;historyId:string|null }
 interface Props { accounts:Account[];connected:boolean;error?:string;isAdmin?:boolean }
@@ -151,6 +152,9 @@ export default function SettingsClient({ accounts, connected, error, isAdmin = f
           )}
         </div>
       </div>
+
+      {/* Promo Radar — admin only */}
+      {isAdmin && <PromoAdmin />}
 
       {/* Initialize / Re-analyze — admin only */}
       {!isAdmin && <p className="text-xs text-gray-600 mb-4">Contact an admin to manage sync settings.</p>}

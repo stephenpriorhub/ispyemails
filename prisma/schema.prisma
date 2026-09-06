@@ -18,6 +18,7 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
 enum Role {
   ADMIN
   USER
@@ -46,10 +47,10 @@ model GmailAccount {
 // ─── Publishers ───────────────────────────────────────────────────────────────
 
 enum PublisherType {
-  INTERNAL          // your own company
-  COMPETITOR        // direct competitor
+  INTERNAL // your own company
+  COMPETITOR // direct competitor
   AFFILIATE_MARKETER // third-party affiliate
-  UNKNOWN           // domain seen but publisher not yet identified
+  UNKNOWN // domain seen but publisher not yet identified
 }
 
 model Publisher {
@@ -64,11 +65,13 @@ model Publisher {
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
-  lists     List[]
-  learnings  Learning[]
-  emails Email[]
-  gurus  Guru[]
-  secondaryGurus GuruSecondaryPublisher[]
+  lists            List[]
+  learnings        Learning[]
+  emails           Email[]
+  gurus            Guru[]
+  secondaryGurus   GuruSecondaryPublisher[]
+  promoAdvertisers PromoAdvertiser[]
+  promoSightings   PromoSighting[]
 }
 
 // ─── Lists (newsletters) ──────────────────────────────────────────────────────
@@ -81,25 +84,26 @@ enum ListCategory {
 }
 
 model List {
-  id          String       @id @default(cuid())
-  name        String       @unique
-  category    ListCategory @default(FREE_EDITORIAL)
-  publisherId String?
-  publisher   Publisher?   @relation(fields: [publisherId], references: [id])
-  notes       String?
+  id               String       @id @default(cuid())
+  name             String       @unique
+  category         ListCategory @default(FREE_EDITORIAL)
+  publisherId      String?
+  publisher        Publisher?   @relation(fields: [publisherId], references: [id])
+  notes            String?
   // Internal pub codes — link an iSpy list to internal MTA email lists (for MTATRIX).
   // Most lists won't have these; they're only for our own lists, not competitors'.
   editorialPubCode String? // editorial sends (T-Letters, articles)
   dedicatedPubCode String? // promos / lift notes
-  synonyms    String[]
-  isIgnored   Boolean      @default(false)
-  autoCreated Boolean      @default(false)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  synonyms         String[]
+  isIgnored        Boolean      @default(false)
+  autoCreated      Boolean      @default(false)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 
-  gurus     GuruList[]
-  learnings  Learning[]
-  emails Email[]
+  gurus          GuruList[]
+  learnings      Learning[]
+  emails         Email[]
+  promoSightings PromoSighting[]
 }
 
 // ─── Gurus (editors/voices) ───────────────────────────────────────────────────
@@ -114,12 +118,12 @@ model Guru {
   publisher        Publisher? @relation(fields: [publisherId], references: [id])
   createdAt        DateTime   @default(now())
 
-  lists           GuruList[]
-  emails          EmailGuru[]
-  learnings       Learning[]
+  lists               GuruList[]
+  emails              EmailGuru[]
+  learnings           Learning[]
   // Secondary voice relationships
-  primaryGurus    SecondaryVoiceGuru[] @relation("SecondaryVoice")
-  secondaryVoices SecondaryVoiceGuru[] @relation("PrimaryGuru")
+  primaryGurus        SecondaryVoiceGuru[]     @relation("SecondaryVoice")
+  secondaryVoices     SecondaryVoiceGuru[]     @relation("PrimaryGuru")
   // Additional publishers this guru writes for (MANUALLY set only — never auto-detected)
   secondaryPublishers GuruSecondaryPublisher[]
 }
@@ -133,6 +137,7 @@ model GuruSecondaryPublisher {
   guru        Guru      @relation(fields: [guruId], references: [id], onDelete: Cascade)
   publisher   Publisher @relation(fields: [publisherId], references: [id], onDelete: Cascade)
   createdAt   DateTime  @default(now())
+
   @@id([guruId, publisherId])
 }
 
@@ -142,6 +147,7 @@ model SecondaryVoiceGuru {
   primaryGuruId    String
   secondaryVoice   Guru   @relation("SecondaryVoice", fields: [secondaryVoiceId], references: [id], onDelete: Cascade)
   primaryGuru      Guru   @relation("PrimaryGuru", fields: [primaryGuruId], references: [id], onDelete: Cascade)
+
   @@id([secondaryVoiceId, primaryGuruId])
 }
 
@@ -152,6 +158,7 @@ model GuruList {
   isIgnored Boolean @default(false) // true = AI learned this guru is NOT on this list
   guru      Guru    @relation(fields: [guruId], references: [id], onDelete: Cascade)
   list      List    @relation(fields: [listId], references: [id], onDelete: Cascade)
+
   @@id([guruId, listId])
 }
 
@@ -184,12 +191,13 @@ model Email {
   syncedAt           DateTime   @default(now())
   createdAt          DateTime   @default(now())
 
-  topics        EmailTopic[]
-  tags          EmailTag[]
-  gurus         EmailGuru[]
-  offer         Offer?
-  learnings     Learning[]
-  deepAnalysis  EmailAnalysis?
+  topics         EmailTopic[]
+  tags           EmailTag[]
+  gurus          EmailGuru[]
+  offer          Offer?
+  learnings      Learning[]
+  deepAnalysis   EmailAnalysis?
+  promoSightings PromoSighting[]
 
   @@index([receivedAt])
   @@index([fromEmail])
@@ -204,6 +212,7 @@ model EmailGuru {
   guruId  String
   email   Email  @relation(fields: [emailId], references: [id], onDelete: Cascade)
   guru    Guru   @relation(fields: [guruId], references: [id], onDelete: Cascade)
+
   @@id([emailId, guruId])
 }
 
@@ -246,6 +255,7 @@ model EmailTopic {
   confidence Float  @default(1.0)
   email      Email  @relation(fields: [emailId], references: [id], onDelete: Cascade)
   topic      Topic  @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
   @@id([emailId, topicId])
 }
 
@@ -264,6 +274,7 @@ model EmailTag {
   tagId   String
   email   Email  @relation(fields: [emailId], references: [id], onDelete: Cascade)
   tag     Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
   @@id([emailId, tagId])
 }
 
@@ -272,7 +283,7 @@ model EmailTag {
 // ─── Intelligence / Learnings ─────────────────────────────────────────────────
 
 enum LearningSource {
-  AI_EMAIL    // extracted from email content by Claude
+  AI_EMAIL // extracted from email content by Claude
   USER_ACTION // logged when user merges, ignores, edits
 }
 
@@ -291,24 +302,24 @@ enum LearningCategory {
 }
 
 model Learning {
-  id              String           @id @default(cuid())
-  content         String           @db.Text
-  source          LearningSource
-  category        LearningCategory @default(GENERAL)
-  status          LearningStatus   @default(PENDING)
-  isContradicted     Boolean          @default(false) // flags when this contradicts validated knowledge
-  contradictionNote  String?          @db.Text        // explains which validated fact this conflicts with
-  appendedToBrain    Boolean          @default(false) // true once pushed to brain vault
-  appendedAt       DateTime?
-  emailId     String?
-  email       Email?           @relation(fields: [emailId], references: [id], onDelete: SetNull)
-  guruId      String?
-  guru        Guru?            @relation(fields: [guruId], references: [id], onDelete: SetNull)
-  publisherId String?
-  publisher   Publisher?       @relation(fields: [publisherId], references: [id], onDelete: SetNull)
-  listId      String?
-  list        List?            @relation(fields: [listId], references: [id], onDelete: SetNull)
-  createdAt   DateTime         @default(now())
+  id                String           @id @default(cuid())
+  content           String           @db.Text
+  source            LearningSource
+  category          LearningCategory @default(GENERAL)
+  status            LearningStatus   @default(PENDING)
+  isContradicted    Boolean          @default(false) // flags when this contradicts validated knowledge
+  contradictionNote String?          @db.Text // explains which validated fact this conflicts with
+  appendedToBrain   Boolean          @default(false) // true once pushed to brain vault
+  appendedAt        DateTime?
+  emailId           String?
+  email             Email?           @relation(fields: [emailId], references: [id], onDelete: SetNull)
+  guruId            String?
+  guru              Guru?            @relation(fields: [guruId], references: [id], onDelete: SetNull)
+  publisherId       String?
+  publisher         Publisher?       @relation(fields: [publisherId], references: [id], onDelete: SetNull)
+  listId            String?
+  list              List?            @relation(fields: [listId], references: [id], onDelete: SetNull)
+  createdAt         DateTime         @default(now())
 }
 
 model Offer {
@@ -326,12 +337,111 @@ model EmailAnalysis {
   id             String   @id @default(cuid())
   emailId        String   @unique
   email          Email    @relation(fields: [emailId], references: [id], onDelete: Cascade)
-  analysisType   String   // PROMO | LIFT_NOTE | EDITORIAL
+  analysisType   String // PROMO | LIFT_NOTE | EDITORIAL
   rawJson        Json
-  complianceRisk String   @default("NONE")  // HIGH | MEDIUM | LOW | NONE
-  mtaOverlap     String   @default("LOW")   // HIGH | MEDIUM | LOW
-  notableFor     String?  // COPY | EDITORIAL | COMPLIANCE | PRODUCT | ALL
+  complianceRisk String   @default("NONE") // HIGH | MEDIUM | LOW | NONE
+  mtaOverlap     String   @default("LOW") // HIGH | MEDIUM | LOW
+  notableFor     String? // COPY | EDITORIAL | COMPLIANCE | PRODUCT | ALL
   modelUsed      String   @default("claude-sonnet-4-5")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+// ─── Promo tracking ───────────────────────────────────────────────────────────
+// Emails carry per-recipient tracking links, not promo URLs. lib/promo-links.ts
+// resolves those to the real landing page; these tables are the running record
+// of which promo each publisher put in front of the industry, on which day.
+
+/// The company whose promo a landing page belongs to — which is NOT the mailer
+/// when the send came through an affiliate file like MarketBeat.
+model PromoAdvertiser {
+  id             String     @id @default(cuid())
+  domain         String     @unique // registrable domain of the landing page
+  label          String // display name; auto-derived, human-editable
+  labelConfirmed Boolean    @default(false)
+  publisherId    String?
+  publisher      Publisher? @relation(fields: [publisherId], references: [id], onDelete: SetNull)
+  isInternal     Boolean    @default(false) // an Oxford Group / MTA property
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  promos Promo[]
+}
+
+model Promo {
+  id           String @id @default(cuid())
+  canonicalKey String @unique // host + normalised path + identifying query
+  landingUrl   String @db.Text
+  landingHost  String
+
+  advertiserId String
+  advertiser   PromoAdvertiser @relation(fields: [advertiserId], references: [id], onDelete: Cascade)
+
+  headline       String? @db.Text
+  headlineSource String? // PAGE_H1 | PAGE_OG | PAGE_TITLE | SUBJECT | MANUAL
+  lastStatus     Int? // HTTP status of the last resolution (403 = Cloudflare-gated)
+
+  firstSeenOn  DateTime @db.Date
+  lastSeenOn   DateTime @db.Date
+  daysDetected Int      @default(1)
+
+  // VidRipper → transcript → promo-analyzer handoff
+  vidripperJobId  String?
+  vidripperStatus String? // requested | ripping | transcribing | analyzing | done | error
+  vidripperError  String?   @db.Text
+  promoReviewId   String?
+  ripRequestedAt  DateTime?
+  ripRequestedBy  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sightings PromoSighting[]
+
+  @@index([lastSeenOn])
+  @@index([advertiserId])
+}
+
+/// One promo appearing in one email. The feed is built from these, so a promo
+/// mailed on five days shows up on five days.
+model PromoSighting {
+  id      String @id @default(cuid())
+  promoId String
+  promo   Promo  @relation(fields: [promoId], references: [id], onDelete: Cascade)
+  emailId String
+  email   Email  @relation(fields: [emailId], references: [id], onDelete: Cascade)
+
+  day         DateTime   @db.Date // ET calendar day the email landed
+  publisherId String? // the mailer
+  publisher   Publisher? @relation(fields: [publisherId], references: [id], onDelete: SetNull)
+  listId      String?
+  list        List?      @relation(fields: [listId], references: [id], onDelete: SetNull)
+  subject     String     @db.Text
+  rawUrl      String     @db.Text // the tracking link as it appeared in the email
+  isFirstEver Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+
+  @@unique([promoId, emailId])
+  @@index([day])
+  @@index([publisherId])
+  @@index([listId])
+}
+
+/// One row per scheduled job per day — makes the wall-clock scheduler idempotent
+/// across restarts and holds the digest we built.
+model PromoJobRun {
+  id            String    @id @default(cuid())
+  kind          String // SCAN | DIGEST
+  day           DateTime  @db.Date
+  status        String // RUNNING | OK | ERROR
+  emailsScanned Int       @default(0)
+  promosFound   Int       @default(0)
+  newPromos     Int       @default(0)
+  digestText    String?   @db.Text
+  slackTs       String?
+  error         String?   @db.Text
+  startedAt     DateTime  @default(now())
+  finishedAt    DateTime?
+
+  @@unique([kind, day])
 }
