@@ -296,7 +296,7 @@ export function readPage(html: string | null): PageInfo {
   if (titleTag) {
     const tail = stripTags(titleTag[1]).match(/\s[|–—-]\s+([^|–—-]{2,40})\s*$/);
     const candidate = tail?.[1]?.trim();
-    if (candidate && !candidate.includes(".") && /[a-z]/i.test(candidate) && candidate.split(/\s+/).length <= 5) {
+    if (candidate && !candidate.includes(".") && /[a-z]/i.test(candidate) && candidate.split(/\s+/).length <= 4) {
       brandSuffix = candidate;
     }
   }
@@ -324,6 +324,7 @@ export function readPage(html: string | null): PageInfo {
       if (trimmed.length >= 8) return { headline: trimmed, headlineSource: source, siteName };
     }
     if (GENERIC_TITLE.test(text)) continue;
+    if (/^[a-z0-9-]+(\.[a-z0-9-]+)+\/?$/i.test(text)) continue; // "clkmg.com"
     if (POPUP_HEADLINE.test(text)) continue;
     if (siteName && text.toLowerCase() === siteName.toLowerCase()) continue;
     return { headline: text, headlineSource: source, siteName };
