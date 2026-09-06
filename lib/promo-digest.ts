@@ -39,6 +39,7 @@ export async function buildDigest(day: string): Promise<Digest> {
           id: true,
           headline: true,
           landingUrl: true,
+          canonicalKey: true,
           daysDetected: true,
           firstSeenOn: true,
           advertiser: { select: { label: true, isInternal: true } },
@@ -60,7 +61,7 @@ export async function buildDigest(day: string): Promise<Digest> {
     byPromo.set(p.id, {
       headline: p.headline ?? "(no headline)",
       advertiser: p.advertiser.label,
-      url: p.landingUrl,
+      url: `https://${p.canonicalKey}`, // tracking params stripped
       daysDetected: p.daysDetected,
       mailers: [mailer],
       isInternal: p.advertiser.isInternal,

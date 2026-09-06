@@ -266,7 +266,7 @@ const metaContent = (html: string, prop: string): string | null => {
 };
 
 /** Titles that tell us nothing — the brand name, a placeholder, a block page. */
-const GENERIC_TITLE = /^(home|index|landing|page|untitled|document|loading|redirecting|just a moment|attention required|access denied|error|404|not found)\b/i;
+const GENERIC_TITLE = /^(home(page)?|index|landing|page|untitled|document|loading|redirecting|just a moment|attention required|access denied|error|404|not found)\b/i;
 
 /** Exit-intent / interstitial copy that sits in the H1 above the real headline. */
 const POPUP_HEADLINE = /^(wait|hold on|stop|don'?t go|do ?not leave|don'?t leave|before you go|are you sure|welcome to|congratulations|thank you)\b/i;
@@ -287,7 +287,21 @@ export function readPage(html: string | null): PageInfo {
   const rawSite = metaContent(html, "og:site_name");
   // Plenty of these pages set og:site_name to a bare domain ("wealthyretirement.com"),
   // which is worse than what we derive ourselves — only take it when it reads as a name.
-  const siteName = rawSite && !rawSite.includes(".") && rawSite.length <= 60 ? rawSite : null;
+  const ogSite = rawSite && !rawSite.includes(".") && rawSite.length <= 60 ? rawSite : null;
+
+  // "<headline> | Golden Portfolio" — the tail is the brand, and it beats
+  // anything we can squeeze out of the domain name.
+  let brandSuffix: string | null = null;
+  const titleTag = html.match(/<title[^>]*>([\s\S]{0,400}?)<\/title>/i);
+  if (titleTag) {
+    const tail = stripTags(titleTag[1]).match(/\s[|–—-]\s+([^|–—-]{2,40})\s*$/);
+    const candidate = tail?.[1]?.trim();
+    if (candidate && !candidate.includes(".") && /[a-z]/i.test(candidate) && candidate.split(/\s+/).length <= 5) {
+      brandSuffix = candidate;
+    }
+  }
+
+  const siteName = ogSite ?? brandSuffix;
 
   const candidates: [string | null, PageInfo["headlineSource"]][] = [];
   for (const m of html.matchAll(/<h1[^>]*>([\s\S]{0,600}?)<\/h1>/gi)) {

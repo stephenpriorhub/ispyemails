@@ -100,8 +100,22 @@ async function advertiserFor(
   mailerName: string | null,
 ): Promise<string> {
   const domain = dest.rootDomain;
-  const existing = await prisma.promoAdvertiser.findUnique({ where: { domain }, select: { id: true } });
-  if (existing) return existing.id;
+  const existing = await prisma.promoAdvertiser.findUnique({
+    where: { domain },
+    select: { id: true, label: true, labelConfirmed: true },
+  });
+  if (existing) {
+    // A later promo on the same domain may expose a real brand name where the
+    // first one only gave us a squashed domain. Take the upgrade — but never
+    // over a label a human has set.
+    if (!existing.labelConfirmed && dest.siteName && dest.siteName !== existing.label) {
+      const derived = advertiserLabelFromDomain(dest.host);
+      if (existing.label === derived) {
+        await prisma.promoAdvertiser.update({ where: { id: existing.id }, data: { label: dest.siteName } });
+      }
+    }
+    return existing.id;
+  }
 
   // A landing page on a publisher's own domain is that publisher's promo.
   // Match the domain label rather than the whole domain — publishers routinely
