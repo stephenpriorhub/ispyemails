@@ -72,9 +72,17 @@ export async function register() {
   const BRAIN_SYNC_OFFSET_MS   = 30 * 60 * 1000;      // 30-min offset from email sync
   const BASE_URL = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 
+  // The API routes are gated (lib/api-auth.ts). This in-process scheduler is a
+  // machine caller with no hub session, so it must present the cron secret —
+  // without it the 3-hourly email sync and 6-hourly brain sync would 401 and
+  // fail silently, which is exactly how the brain-write outage went unnoticed
+  // for days. If CRON_SECRET is unset the header is empty and the gate refuses,
+  // which is the safe direction: visible in logs rather than silently open.
+  const schedulerHeaders = { "x-cron-secret": process.env.CRON_SECRET ?? "" };
+
   async function runSync() {
     try {
-      const res = await fetch(`${BASE_URL}/api/sync`);
+      const res = await fetch(`${BASE_URL}/api/sync`, { headers: schedulerHeaders });
       const data = await res.json();
       const results = data.results ?? [];
       const totalNew = results.reduce((sum: number, r: { newEmails?: number }) => sum + (r.newEmails ?? 0), 0);
@@ -86,7 +94,7 @@ export async function register() {
 
   async function runBrainSync() {
     try {
-      const res = await fetch(`${BASE_URL}/api/cron/brain-sync`);
+      const res = await fetch(`${BASE_URL}/api/cron/brain-sync`, { headers: schedulerHeaders });
       const data = await res.json() as { pushed?: number; errors?: string[] };
       if (data.pushed && data.pushed > 0) {
         console.log(`[iSpyFinpub] Brain-sync: pushed ${data.pushed} learning(s) to vault`);

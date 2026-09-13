@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { syncGmailAccount } from "@/lib/sync";
+import { requireApiAdmin, requireApiUser } from "@/lib/api-auth";
 
 export async function GET() {
+  const denied = await requireApiUser();
+  if (denied) return denied;
+
   const accounts = await prisma.gmailAccount.findMany({ where: { isActive: true } });
   if (!accounts.length) return NextResponse.json({ message: "No active Gmail accounts" });
   const results = [];
@@ -16,6 +20,9 @@ export async function GET() {
 // POST: analyze a batch of unprocessed emails. Returns remaining count.
 // Call repeatedly until remaining === 0.
 export async function POST(req: NextRequest) {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   const { batchSize = 10 } = await req.json().catch(() => ({ batchSize: 10 }));
 
   const emails = await prisma.email.findMany({
@@ -69,6 +76,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE() {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   await prisma.gmailAccount.updateMany({ data: { historyId: null } });
   return NextResponse.json({ ok: true, message: "historyId cleared — next sync will backfill all emails" });
 }
@@ -77,6 +87,9 @@ export async function DELETE() {
 // Does NOT re-run full analysis (no topics, gurus, publisher re-matching).
 // Just extracts the list name and assigns it.
 export async function PATCH(req: NextRequest) {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   const { batchSize = 15 } = await req.json().catch(() => ({ batchSize: 15 }));
 
   const remaining = await prisma.email.count({ where: { listId: null } });

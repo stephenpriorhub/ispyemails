@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireApiAdmin, requireApiUser } from "@/lib/api-auth";
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await requireApiUser();
+  if (denied) return denied;
+
   const { id } = await params;
   const publisher = await prisma.publisher.findUnique({
     where: { id },
@@ -46,6 +50,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   const { id } = await params;
   const body = await req.json();
   const publisher = await prisma.publisher.update({
@@ -65,6 +72,9 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   const { id } = await params;
   const { unassignEmails } = await req.json().catch(() => ({ unassignEmails: true }));
 

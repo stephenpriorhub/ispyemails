@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireApiAdmin } from "@/lib/api-auth";
 
 // POST: assign a list to a guru
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   const { id: guruId } = await params;
   const { listId, isPrimary } = await req.json();
 
@@ -39,6 +43,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
 // DELETE: ignore a guru-list association (trains AI not to link them)
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   const { id: guruId } = await params;
   const { listId } = await req.json();
 

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireApiUser } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
+  const denied = await requireApiUser();
+  if (denied) return denied;
+
   const sp = req.nextUrl.searchParams;
   const page = parseInt(sp.get("page") ?? "1"), limit = parseInt(sp.get("limit") ?? "50");
   const where: Record<string, unknown> = {};

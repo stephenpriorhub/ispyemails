@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireApiAdmin } from "@/lib/api-auth";
 
 export async function POST() {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   // 1. Delete emails FROM the spy account itself
   const accounts = await prisma.gmailAccount.findMany({ select: { email: true } });
   const selfEmails = accounts.map((a) => a.email);

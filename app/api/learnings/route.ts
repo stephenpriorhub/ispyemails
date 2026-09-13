@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireApiAdmin, requireApiUser } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
+  const denied = await requireApiUser();
+  if (denied) return denied;
+
   const sp = req.nextUrl.searchParams;
   const status = sp.get("status") ?? "PENDING";
   const limit = parseInt(sp.get("limit") ?? "50");
@@ -22,6 +26,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   const { content, source, category, emailId, guruId, publisherId, listId } = await req.json();
   const learning = await prisma.learning.create({
     data: { content, source, category: category ?? "GENERAL", emailId, guruId, publisherId, listId },
@@ -32,6 +39,9 @@ export async function POST(req: NextRequest) {
 // DELETE: remove pending learnings that duplicate validated knowledge,
 // and backfill contradiction notes on any flagged items missing them.
 export async function DELETE() {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   const { cleanupDuplicateLearnings, backfillContradictionNotes } = await import("@/lib/learnings");
   const [removed, notesAdded] = await Promise.all([
     cleanupDuplicateLearnings(),

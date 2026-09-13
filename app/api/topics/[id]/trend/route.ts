@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireApiUser } from "@/lib/api-auth";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -11,6 +12,9 @@ const DAY = 24 * 60 * 60 * 1000;
  * publishers by share so the chart tooltip can show who drove that day.
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireApiUser();
+  if (denied) return denied;
+
   const { id } = await params;
   const daysParam = parseInt(req.nextUrl.searchParams.get("days") ?? "30");
   const days = [7, 30, 90].includes(daysParam) ? daysParam : 30;

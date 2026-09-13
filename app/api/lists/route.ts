@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireApiAdmin, requireApiUser } from "@/lib/api-auth";
 
 export async function GET() {
+  const denied = await requireApiUser();
+  if (denied) return denied;
+
   const lists = await prisma.list.findMany({
     include: {
       publisher: { select: { id: true, name: true, type: true } },
@@ -14,6 +18,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   const { name, category, publisherId, notes } = await req.json();
   if (!name) return NextResponse.json({ error: "Name required" }, { status: 400 });
   const list = await prisma.list.create({

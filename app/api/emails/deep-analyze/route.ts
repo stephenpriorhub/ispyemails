@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 import type { EmailType } from "@prisma/client";
+import { requireApiAdmin } from "@/lib/api-auth";
 const DEEP_TYPES: EmailType[] = ["PROMO", "LIFT_NOTE", "EDITORIAL"];
 const CONCURRENCY = 5;
 
@@ -15,6 +16,9 @@ const CONCURRENCY = 5;
  * Returns: { queued, completed, failed, skipped }
  */
 export async function POST() {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   // Find eligible emails that have no deep analysis yet
   const emails = await prisma.email.findMany({
     where: {

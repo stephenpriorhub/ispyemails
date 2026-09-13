@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { analyzeEmail } from "@/lib/analyze";
+import { requireApiAdmin } from "@/lib/api-auth";
 
 /**
  * POST /api/reclassify-unknown
@@ -9,6 +10,9 @@ import { analyzeEmail } from "@/lib/analyze";
  * Safe to call multiple times — already-classified emails are skipped.
  */
 export async function POST() {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   const unknownEmails = await prisma.email.findMany({
     where: { emailType: "UNKNOWN" },
     select: {

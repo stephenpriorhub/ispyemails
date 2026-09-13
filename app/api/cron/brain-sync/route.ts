@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { exportLearningsToBrain } from "@/lib/brain-export";
+import { requireApiAdmin } from "@/lib/api-auth";
 
 const AGENT_LOG_URL = "https://oxfordhub.app/api/agent-log";
 const AGENT_NAME = "iSpy Brain Agent";
@@ -18,6 +19,9 @@ async function logToAgentOps(action: string, detail: string, sessionId: string) 
 
 // GET — called by the instrumentation.ts scheduler every 6 hours
 export async function GET() {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   const sessionId = new Date().toISOString().slice(0, 13).replace("T", "-"); // e.g. "2026-06-11-14"
 
   const result = await exportLearningsToBrain();

@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { logUserLearning } from "@/lib/learnings";
+import { requireApiAdmin, requireApiUser } from "@/lib/api-auth";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireApiUser();
+  if (denied) return denied;
+
   const { id } = await params;
   const guru = await prisma.guru.findUnique({
     where: { id },
@@ -20,6 +24,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   const { id } = await params;
   const { name, notes, isIgnored, isSecondaryVoice, publisherId } = await req.json();
   const data: Record<string, unknown> = {};
@@ -50,6 +57,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   const { id } = await params;
   await prisma.guru.delete({ where: { id } });
   return NextResponse.json({ ok: true });

@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { logUserLearning } from "@/lib/learnings";
+import { requireApiAdmin } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest) {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   const { sourceId, targetId } = await req.json();
   if (!sourceId || !targetId || sourceId === targetId)
     return NextResponse.json({ error: "Invalid ids" }, { status: 400 });

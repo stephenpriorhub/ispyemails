@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { syncGmailAccount } from "@/lib/sync";
+import { requireApiAdmin } from "@/lib/api-auth";
 
 // POST /api/gmail/backfill — clears historyId to force a full re-sync from recent messages
 // Use this to recover emails missed during an invalid_grant gap
 export async function POST(req: Request) {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   try {
     const { email } = await req.json().catch(() => ({}));
     const where = email ? { email } : {};

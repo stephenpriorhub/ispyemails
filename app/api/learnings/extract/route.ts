@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type Anthropic from "@anthropic-ai/sdk";
+import { requireApiAdmin } from "@/lib/api-auth";
 
 // Retroactively extract learnings from already-processed emails without
 // re-running the full analysis pipeline.
@@ -37,6 +38,9 @@ async function getClient(): Promise<Anthropic> {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   const { days = 30, batchId } = await req
     .json()
     .catch(() => ({ days: 30, batchId: undefined }));

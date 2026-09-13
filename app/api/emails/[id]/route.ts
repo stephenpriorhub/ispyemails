@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { analyzeEmail } from "@/lib/analyze";
+import { requireApiAdmin, requireApiUser } from "@/lib/api-auth";
 export async function GET(_req: NextRequest, { params }: { params: Promise<{id:string}> }) {
+  const denied = await requireApiUser();
+  if (denied) return denied;
+
   const { id } = await params;
   const email = await prisma.email.findUnique({ where:{id}, include:{publisher:true,topics:{include:{topic:true}},tags:{include:{tag:true}},offer:true} });
   if (!email) return NextResponse.json({ error:"Not found" },{status:404});
   return NextResponse.json(email);
 }
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{id:string}> }) {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   const { id } = await params;
   const body = await req.json();
   const { publisherId, publisherConfirmed, listId, listConfirmed, emailType, emailTypeConfirmed, tagIds, topicIds } = body;
@@ -28,6 +35,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{id:
   return NextResponse.json(email);
 }
 export async function POST(_req: NextRequest, { params }: { params: Promise<{id:string}> }) {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   const { id } = await params;
   const email = await prisma.email.findUnique({ where:{id} });
   if (!email) return NextResponse.json({error:"Not found"},{status:404});
@@ -35,6 +45,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{id:
   return NextResponse.json(await prisma.email.findUnique({where:{id},include:{publisher:true,topics:{include:{topic:true}},tags:{include:{tag:true}},offer:true}}));
 }
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{id:string}> }) {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   const { id } = await params;
   await prisma.email.delete({ where: { id } });
   return NextResponse.json({ ok: true });

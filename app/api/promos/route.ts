@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
+import { requireApiUser } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,9 @@ const DAYS_PER_PAGE = 4;
  * day across two pages: `cursor` is the last day already rendered.
  */
 export async function GET(req: NextRequest) {
+  const denied = await requireApiUser();
+  if (denied) return denied;
+
   const sp = req.nextUrl.searchParams;
   const cursor = sp.get("cursor"); // YYYY-MM-DD — return days strictly before this
   const publisherId = sp.get("publisher");

@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireApiAdmin } from "@/lib/api-auth";
 
 // Seeds known financial publishers. Safe to call multiple times (upsert).
 export async function POST() {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   const publishers = [
     { name: "Weiss Ratings", domains: ["weissratings.com", "weiss.com"], website: "https://weissratings.com" },
     { name: "Oxford Club", domains: ["oxfordclub.com", "pro.oxfordclub.com"], website: "https://oxfordclub.com" },

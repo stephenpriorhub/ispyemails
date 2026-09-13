@@ -14,6 +14,7 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireApiUser } from "@/lib/api-auth";
 
 export const runtime = "nodejs";
 
@@ -28,6 +29,9 @@ function fmtDate(d: Date): string {
 }
 
 export async function GET(req: Request) {
+  const denied = await requireApiUser();
+  if (denied) return denied;
+
   // Enforced when CRON_SECRET is configured (matches the email-sync cron convention).
   // If it's unset, the endpoint is open — set CRON_SECRET on the iSpy service to lock it down.
   const secret = process.env.CRON_SECRET;

@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { logUserLearning } from "@/lib/learnings";
+import { requireApiAdmin } from "@/lib/api-auth";
 
 // Secondary publishers are set MANUALLY only (rare multi-publisher gurus).
 // The email analyzer never writes here — see lib/analyze.ts.
 
 // POST: add a secondary publisher to a guru
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   const { id: guruId } = await params;
   const { publisherId } = await req.json();
   if (!publisherId) return NextResponse.json({ error: "publisherId required" }, { status: 400 });
@@ -37,6 +41,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
 // DELETE: remove a secondary publisher from a guru
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   const { id: guruId } = await params;
   const { publisherId } = await req.json();
   if (!publisherId) return NextResponse.json({ error: "publisherId required" }, { status: 400 });

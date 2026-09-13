@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { analyzeEmail } from "@/lib/analyze";
+import { requireApiAdmin } from "@/lib/api-auth";
 
 /**
  * POST /api/reclassify-watchlist
@@ -24,6 +25,9 @@ const SENDER = "tradeoftheday@mb.mtatradeoftheday.com";
 const WATCHLIST_LIST_NAME = "Trade of the Day Wakeup Watchlist";
 
 export async function POST() {
+  const denied = await requireApiAdmin();
+  if (denied) return denied;
+
   // Candidate misfiled emails: from the MTA sender, signal matches Watchlist,
   // but currently NOT already filed under the Watchlist list.
   const candidates = await prisma.email.findMany({
