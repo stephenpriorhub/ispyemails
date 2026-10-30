@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import {
   resolveEmailDestinations,
   advertiserLabelFromDomain,
+  contentKey,
   rootDomain,
   type Destination,
 } from "@/lib/promo-links";
@@ -194,6 +195,8 @@ export async function scanDay(day: string, { force = false } = {}): Promise<Scan
   });
 
   const publishers = await prisma.publisher.findMany({ select: { id: true, name: true, type: true, domains: true } });
+  // Pages an admin removed as "not a promo" — by URL or by content.
+  const blocked = new Set((await prisma.promoBlock.findMany({ select: { matchKey: true } })).map((b) => b.matchKey));
 
   const result: ScanResult = { day, emailsScanned: emails.length, sightings: 0, newPromos: 0, unresolved: 0, errors: [] };
 
@@ -216,20 +219,34 @@ export async function scanDay(day: string, { force = false } = {}): Promise<Scan
           excludeRootDomains: exclude,
           excludeBrands: isAffiliateFile && email.publisher?.name ? [email.publisher.name] : [],
         });
-        const dest = dests[0];
+        const isBlocked = (d: Destination) => {
+          const ck = contentKey(d);
+          return blocked.has(`url:${d.canonicalKey}`) || (!!ck && blocked.has(`content:${ck}`));
+        };
+        const dest = dests.find((d) => !isBlocked(d));
         if (!dest) {
           result.unresolved++;
           continue;
         }
+        const ck = contentKey(dest);
 
         const advertiserId = await advertiserFor(dest, publishers);
         const headline = dest.headline ?? email.subject;
         const headlineSource = dest.headline ? dest.headlineSource : "SUBJECT";
 
-        const existing = await prisma.promo.findUnique({
-          where: { canonicalKey: dest.canonicalKey },
-          select: { id: true, firstSeenOn: true, lastSeenOn: true, headlineSource: true },
-        });
+        // Same URL, or the same page reached by a different per-send URL.
+        const existing =
+          (await prisma.promo.findUnique({
+            where: { canonicalKey: dest.canonicalKey },
+            select: { id: true, firstSeenOn: true, lastSeenOn: true, headlineSource: true, contentKey: true },
+          })) ??
+          (ck
+            ? await prisma.promo.findFirst({
+                where: { contentKey: ck },
+                select: { id: true, firstSeenOn: true, lastSeenOn: true, headlineSource: true, contentKey: true },
+                orderBy: { createdAt: "asc" },
+              })
+            : null);
 
         let promoId: string;
         let isFirstEver = false;
@@ -244,6 +261,7 @@ export async function scanDay(day: string, { force = false } = {}): Promise<Scan
             data: {
               landingUrl: dest.url,
               lastStatus: dest.status,
+              ...(ck && !existing.contentKey ? { contentKey: ck } : {}),
               kind: dest.kind,
               lastSeenOn: date > existing.lastSeenOn ? date : existing.lastSeenOn,
               firstSeenOn: date < existing.firstSeenOn ? date : existing.firstSeenOn,
@@ -256,6 +274,7 @@ export async function scanDay(day: string, { force = false } = {}): Promise<Scan
             .create({
               data: {
                 canonicalKey: dest.canonicalKey,
+                contentKey: ck,
                 landingUrl: dest.url,
                 landingHost: dest.host,
                 advertiserId,

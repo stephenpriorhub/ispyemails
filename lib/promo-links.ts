@@ -354,6 +354,9 @@ const NOT_A_PROMO_PATH = [
   /\/articles?\//i, /\/blog\//i, /\/contact/i, /\/careers/i, /\/faq\b/i,
   /interstitial/i, /\/optout/i, /opt[-_]?out/i, /whitelist/i, /\/homepage\b/i,
   /^\/j\/\d{9,}/, // zoom.us/j/<id> — a meeting invite, not a landing page
+  /sub-center/i, /subscription-?cent(er|re)/i, // ESP subscription centers (Brownstone, Opp. Trader)
+  /\/view-email\b/i, /\/view-?in-?browser/i, /\/webversion/i, // "view this email in your browser"
+  /\/hclick\b/i, // beehiiv click-tracker that never resolved further
 ];
 
 /**
@@ -368,6 +371,9 @@ const NOT_A_PROMO_HEADLINE = [
   /javascript is (disabled|required)/i, /enable javascript/i, /please wait/i,
   /whitelist/i, /frequently asked questions/i, /^faq\b/i, /offers? manager/i,
   /^(about|contact) /i, /restoring the lost art/i,
+  /subscription cent(er|re)/i, /bot detection/i, /pardon our interruption/i, /are you a (human|robot)/i,
+  /verify(ing)? you are (human|not a robot)/i, /^hello!? we are\b/i, /^view (this )?email/i,
+  /^sign ?in\b/i, /^log ?in\b/i, /^my account\b/i,
 ];
 
 /**
@@ -431,6 +437,54 @@ export function classifyPage(finalUrl: string, html: string | null): PromoKind {
   // Require real rendered copy — a JS shell tells us nothing either way.
   if (hasOptIn && visibleWordCount(html) >= 100) return "LEAD_GEN";
   return "VSL";
+}
+
+/** The page carries a VSL player or an opt-in form — what a promo page is. */
+export function hasPromoEvidence(html: string | null): boolean {
+  if (!html) return false;
+  return VIDEO_MARKERS.test(html) || EMAIL_INPUT.test(html) || PHONE_INPUT.test(html) || NAME_INPUT.test(html);
+}
+
+/** Judge an already-stored promo by its URL and headline — for the backfill. */
+export function isNotAPromo(url: string, headline: string | null): boolean {
+  if (isBoilerplateDestination(url)) return true;
+  return !!headline && NOT_A_PROMO_HEADLINE.some((re) => re.test(headline));
+}
+
+const canonText = (s: string) =>
+  decodeEntities(s).toLowerCase().replace(/&/g, " and ").replace(/['’]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+
+/**
+ * What the promo IS, independent of the URL it was reached by.
+ *
+ * Publishers mint a fresh URL per send (signup.oxfordclub.com/X2996AFL, …AEK,
+ * …AEL) for the same page, so the URL alone made one promo look like 25. Same
+ * advertiser domain + same on-page headline = same promo.
+ *
+ * Returns null when the headline can't identify a promo on its own: none read
+ * from the page, a platform domain hosting many advertisers' funnels, or a
+ * headline that is just the brand ("Monument Traders Alliance LIVE EVENT").
+ */
+export function contentKey(d: {
+  rootDomain: string;
+  host: string;
+  headline: string | null;
+  headlineSource: string | null;
+  siteName: string | null;
+  isPlatform: boolean;
+}): string | null {
+  if (!d.headline || d.isPlatform) return null;
+  if (d.headlineSource !== "PAGE_H1" && d.headlineSource !== "PAGE_OG" && d.headlineSource !== "PAGE_TITLE") return null;
+  const head = canonText(d.headline);
+  if (!head || GENERIC_TITLE.test(head)) return null;
+  let rest = ` ${head} `;
+  for (const brand of [d.siteName, advertiserLabelFromDomain(d.host), d.rootDomain.replace(/\.[a-z.]+$/, "")]) {
+    const b = brand ? canonText(brand) : "";
+    if (b.length > 2) rest = rest.replace(` ${b} `, " ");
+  }
+  const meaningful = rest.trim().split(" ").filter((w) => w && !["live", "event", "the", "a", "and", "of", "home", "official", "site"].includes(w));
+  if (meaningful.length < 2) return null;
+  return `${d.rootDomain}|${head}`;
 }
 
 export interface Destination {
@@ -516,6 +570,9 @@ export async function resolveEmailDestinations(
     const headlineish = (page.headline ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
     // "The Oxford Club - Home" on oxfordclub.com/ is the masthead link.
     if (isBareHome && (!page.headline || (brandish.length > 3 && headlineish.includes(brandish)))) continue;
+    // A homepage is only a promo when it actually sells — a VSL player or an
+    // opt-in form on the page. brownstoneresearch.com/?emailjobid=… is the logo link.
+    if (isBareHome && !hasPromoEvidence(res.html)) continue;
     byKey.set(key, {
       url: res.finalUrl,
       canonicalKey: key,

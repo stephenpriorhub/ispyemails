@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  ExternalLink, Film, Loader2, CheckCircle2, AlertCircle, Search, X, Sparkles, Pencil,
+  ExternalLink, Film, Loader2, CheckCircle2, AlertCircle, Search, X, Sparkles, Pencil, Trash2,
 } from "lucide-react";
 
 interface Mailer {
@@ -110,6 +110,11 @@ export default function PromoFeed({ publishers, lists, isAdmin }: Props) {
     return () => io.disconnect();
   }, [cursor, done, loading, load]);
 
+  const remove = (promoId: string) =>
+    setDays((prev) =>
+      prev.map((d) => ({ ...d, promos: d.promos.filter((p) => p.id !== promoId) })).filter((d) => d.promos.length),
+    );
+
   const patch = (promoId: string, changes: Partial<Promo>) =>
     setDays((prev) =>
       prev.map((d) => ({ ...d, promos: d.promos.map((p) => (p.id === promoId ? { ...p, ...changes } : p)) })),
@@ -190,7 +195,7 @@ export default function PromoFeed({ publishers, lists, isAdmin }: Props) {
           </div>
           <div className="space-y-2">
             {group.promos.map((p) => (
-              <PromoRow key={`${group.day}-${p.id}`} promo={p} isAdmin={isAdmin} onChange={patch} />
+              <PromoRow key={`${group.day}-${p.id}`} promo={p} isAdmin={isAdmin} onChange={patch} onRemove={remove} />
             ))}
           </div>
         </section>
@@ -227,12 +232,21 @@ const selectCls =
   "px-2.5 py-1.5 bg-gray-900 border border-gray-800 rounded-md text-sm text-gray-300 focus:outline-none focus:border-amber-500/50";
 
 function PromoRow({
-  promo, isAdmin, onChange,
+  promo, isAdmin, onChange, onRemove,
 }: {
   promo: Promo;
   isAdmin: boolean;
   onChange: (id: string, changes: Partial<Promo>) => void;
+  onRemove: (id: string) => void;
 }) {
+  const [confirmRemove, setConfirmRemove] = useState(false);
+
+  async function removePromo() {
+    const res = await fetch(`/api/promos/${promo.id}`, { method: "DELETE" });
+    if (res.ok) onRemove(promo.id);
+    else setConfirmRemove(false);
+  }
+
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editingAdvertiser, setEditingAdvertiser] = useState(false);
@@ -443,7 +457,7 @@ function PromoRow({
         </div>
 
         {isAdmin && (
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0 flex flex-col items-end gap-1.5">
             {promo.promoReviewId ? (
               <a
                 href={`https://analyzer.oxfordhub.app/?review=${promo.promoReviewId}`}
@@ -473,6 +487,20 @@ function PromoRow({
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
               >
                 <Film className="w-3.5 h-3.5" /> Rip &amp; analyze
+              </button>
+            )}
+            {confirmRemove ? (
+              <span className="flex items-center gap-1.5 text-[11px]">
+                <button onClick={removePromo} className="text-red-400 hover:text-red-300">Remove for good</button>
+                <button onClick={() => setConfirmRemove(false)} className="text-gray-500 hover:text-gray-300">Cancel</button>
+              </span>
+            ) : (
+              <button
+                onClick={() => setConfirmRemove(true)}
+                title="Not a promo (or a duplicate) — remove it and keep it from coming back"
+                className="flex items-center gap-1 text-[11px] text-gray-600 hover:text-red-400"
+              >
+                <Trash2 className="w-3 h-3" /> Remove
               </button>
             )}
           </div>

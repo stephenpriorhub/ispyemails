@@ -374,6 +374,9 @@ model PromoAdvertiser {
 model Promo {
   id           String @id @default(cuid())
   canonicalKey String @unique // host + normalised path + identifying query
+  /// Root domain + on-page headline. One promo reached by many per-send URLs
+  /// shares this; null when the headline can't identify the promo on its own.
+  contentKey   String?
   landingUrl   String @db.Text
   landingHost  String
 
@@ -411,6 +414,8 @@ model Promo {
   @@index([lastSeenOn])
   @@index([advertiserId])
   @@index([kind])
+
+  @@index([contentKey])
 }
 
 /// One promo appearing in one email. The feed is built from these, so a promo
@@ -436,6 +441,17 @@ model PromoSighting {
   @@index([day])
   @@index([publisherId])
   @@index([listId])
+}
+
+/// A page an admin removed as "not a promo". The scan skips any destination
+/// matching on URL (url:<canonicalKey>) or content (content:<contentKey>), so a
+/// removal sticks instead of coming back on the next run.
+model PromoBlock {
+  id        String   @id @default(cuid())
+  matchKey  String   @unique
+  label     String?  @db.Text // the headline/URL at removal time, for audit
+  createdBy String?
+  createdAt DateTime @default(now())
 }
 
 /// One row per scheduled job per day — makes the wall-clock scheduler idempotent

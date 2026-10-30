@@ -66,3 +66,37 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   });
   return NextResponse.json(updated);
 }
+
+/**
+ * Remove a page that isn't a promo (or is noise). Records a block on its URL and
+ * its content fingerprint so the next scan doesn't resurrect it, then deletes it
+ * with its sightings.
+ */
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const user = await getSessionUser();
+  if (!user || !ADMIN_ROLES.has(user.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  const promo = await prisma.promo.findUnique({
+    where: { id },
+    select: { canonicalKey: true, contentKey: true, headline: true, landingUrl: true },
+  });
+  if (!promo) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const label = promo.headline ?? promo.landingUrl;
+  const keys = [`url:${promo.canonicalKey}`, ...(promo.contentKey ? [`content:${promo.contentKey}`] : [])];
+  await prisma.$transaction([
+    ...keys.map((matchKey) =>
+      prisma.promoBlock.upsert({
+        where: { matchKey },
+        update: {},
+        create: { matchKey, label, createdBy: user.email ?? null },
+      }),
+    ),
+    // Every URL variant of the same page goes with it.
+    prisma.promo.deleteMany({
+      where: { OR: [{ id }, ...(promo.contentKey ? [{ contentKey: promo.contentKey }] : [])] },
+    }),
+  ]);
+  return NextResponse.json({ ok: true });
+}
