@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { logAILearning } from "./learnings";
 import { getAffiliateSeed } from "./affiliate-seeds";
+import { canonListName, cleanListName, isPlausibleNewListName, looksLikeSubjectLine } from "./list-name";
 
 // ─── Pass 2 types ─────────────────────────────────────────────────────────────
 
@@ -388,11 +389,12 @@ SUBJECT: ${subject}
 BODY SNIPPET: ${bodySnippet.substring(0, 500)}
 KNOWN LISTS FOR THIS PUBLISHER: ${knownLists.join(", ") || "none"}
 
-What is the newsletter/list name? If it matches a known list exactly, use that name.
+What is the newsletter/list name? If it matches a known list, use that name exactly.
+The list name is the recurring newsletter brand — NEVER the subject line or the article headline.
 Reply with ONLY the name (e.g. "Daily Reckoning"). If you cannot determine it, reply NULL.`,
       }],
     });
-    const reply = (msg.content[0] as { text: string }).text.trim();
+    const reply = msg.content.find(b => b.type === "text")?.text.trim() ?? "";
     if (reply && reply !== "NULL" && reply.length < 80 && !reply.includes("\n")) return reply;
   } catch { /* ignore */ }
   return null;
@@ -409,8 +411,12 @@ export async function extractListForEmail(
   bodyHtml: string | null,
   fromName = ""
 ): Promise<string | null> {
+  // Every candidate is gated: beehiiv/Substack/MarketBeat put the HEADLINE in
+  // <title> and <h1>, which used to mint one list per email (see lib/list-name.ts).
+  const ok = (n: string | null | undefined) => (isPlausibleNewListName(n, subject) ? cleanListName(n) : null);
+
   // 1. Pre-processor (subject pattern + from-address + from-name)
-  const fromPreProcessor = extractListFromSignals(subject, fromEmail, fromName);
+  const fromPreProcessor = ok(extractListFromSignals(subject, fromEmail, fromName));
   if (fromPreProcessor) return fromPreProcessor;
 
   // 2. HTML <title> tag
@@ -418,12 +424,12 @@ export async function extractListForEmail(
   const titleTag = html.substring(0, 2000).match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   if (titleTag) {
     const t = titleTag[1].trim().replace(/\s+/g, " ");
-    if (t.length > 2 && t.length < 80 && !t.toLowerCase().includes("<!")) return t;
+    if (!t.toLowerCase().includes("<!") && ok(t)) return ok(t);
   }
 
   // 3. Image alt text in first 3000 chars
-  const mastheadSignals = extractMastheadSignals(html);
-  const imgAlt = mastheadSignals.match(/Image alt: "([^"]+)"/)?.[1];
+  const mastheadSignals = extractMastheadSignals(html, subject);
+  const imgAlt = ok(mastheadSignals.match(/Image alt: "([^"]+)"/)?.[1]);
   if (imgAlt) return imgAlt;
 
   // 4. Quick Claude call with just the key signals
@@ -438,6 +444,7 @@ MASTHEAD SIGNALS: ${mastheadSignals || "none"}
 BODY START: ${(bodyHtml ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").substring(0, 1000)}
 
 What is the newsletter/list name? Reply with ONLY the name (e.g. "Daily Reckoning", "Altucher Confidential").
+The list name is the recurring newsletter brand — NEVER the subject line or the article headline.
 If you cannot determine it, reply with the word NULL.`;
 
     const msg = await client.messages.create({
@@ -445,8 +452,8 @@ If you cannot determine it, reply with the word NULL.`;
       max_tokens: 50,
       messages: [{ role: "user", content: prompt }],
     });
-    const reply = (msg.content[0] as { text: string }).text.trim();
-    if (reply && reply !== "NULL" && reply.length < 80 && !reply.includes("\n")) return reply;
+    const reply = msg.content.find(b => b.type === "text")?.text.trim() ?? "";
+    if (reply && reply !== "NULL" && !reply.includes("\n")) return ok(reply);
   } catch { /* ignore */ }
 
   return null;
@@ -457,15 +464,19 @@ If you cannot determine it, reply with the word NULL.`;
  * Looks at: image alt text, h1/h2 headings, title attributes.
  * These often contain the masthead newsletter name.
  */
-function extractMastheadSignals(html: string): string {
+function extractMastheadSignals(html: string, subject = ""): string {
   const top = html.substring(0, 6000);
   const signals: string[] = [];
+  // A masthead is a recurring brand, never this email's headline. beehiiv/Substack/
+  // MarketBeat set <title> and <h1> to the headline — drop those so neither the AI
+  // nor the fallbacks below mistake a headline for the list name.
+  const isMasthead = (v: string) => isPlausibleNewListName(v, subject);
 
-  // 1. HTML <title> tag — most reliable, always in the <head>
+  // 1. HTML <title> tag — reliable for ESPs that use the brand, not the headline
   const titleTag = top.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   if (titleTag) {
     const t = titleTag[1].trim().replace(/\s+/g, " ");
-    if (t.length > 2 && t.length < 80 && !t.toLowerCase().includes("<!")) {
+    if (!t.toLowerCase().includes("<!") && isMasthead(t)) {
       signals.push(`Email title: "${t}"`);
     }
   }
@@ -475,7 +486,7 @@ function extractMastheadSignals(html: string): string {
   const skipAlts = ["logo", "banner", "header", "image", "photo", "unsubscribe", "view", "spacer", "pixel"];
   for (const match of imgAlts.slice(0, 8)) {
     const alt = match[1].trim();
-    if (!skipAlts.some(g => alt.toLowerCase().includes(g))) {
+    if (!skipAlts.some(g => alt.toLowerCase().includes(g)) && isMasthead(alt)) {
       signals.push(`Image alt: "${alt}"`);
     }
   }
@@ -484,13 +495,13 @@ function extractMastheadSignals(html: string): string {
   const headings = [...top.matchAll(/<h[12][^>]*>([\s\S]*?)<\/h[12]>/gi)];
   for (const match of headings.slice(0, 3)) {
     const text = match[1].replace(/<[^>]+>/g, "").replace(/&[a-z#\d]+;/gi, " ").trim();
-    if (text.length > 2 && text.length < 80) signals.push(`Heading: "${text}"`);
+    if (isMasthead(text)) signals.push(`Heading: "${text}"`);
   }
 
   // 4. Title attributes on elements (e.g. <img title="Altucher Confidential">)
   const titleAttrs = [...top.matchAll(/\btitle=["']([A-Z][^"']{3,50})["']/gi)];
   for (const match of titleAttrs.slice(0, 3)) {
-    signals.push(`Title attr: "${match[1].trim()}"`);
+    if (isMasthead(match[1].trim())) signals.push(`Title attr: "${match[1].trim()}"`);
   }
 
   return signals.length > 0 ? signals.join(" | ") : "";
@@ -594,7 +605,7 @@ export async function analyzeEmail(
 
   // Extract masthead signals from HTML: image alt text + heading tags
   // These often contain the newsletter name even when plain text doesn't
-  const mastheadContext = bodyHtml ? extractMastheadSignals(bodyHtml) : "";
+  const mastheadContext = bodyHtml ? extractMastheadSignals(bodyHtml, subject) : "";
 
   const ignoredTopicNames = new Set([
     ...ignoredTopics.flatMap(t => [t.name.toLowerCase(), ...t.synonyms.map(s => s.toLowerCase())]),
@@ -646,7 +657,7 @@ Return ONLY this JSON:
 {
   "publisher": "Publisher name from list or null",
   "publisherConfidence": 0.0,
-  "list": "Newsletter/list name — check MASTHEAD SIGNALS first (image alts/headings above), then subject, then body. e.g. Image:'ALTUCHER CONFIDENTIAL' → 'Altucher Confidential'",
+  "list": "Newsletter/list name — the RECURRING brand, check MASTHEAD SIGNALS first (image alts/headings above), then from-name, then body. NEVER the subject line or an article headline. null if unclear. e.g. Image:'ALTUCHER CONFIDENTIAL' → 'Altucher Confidential'",
   "listConfidence": 0.0,
   "gurus": ["ONLY the actual author/editor who WROTE this email — see rules; empty if unsure"],
   "emailType": "LIFT_NOTE|EDITORIAL|PROMO|WELCOME|UNKNOWN",
@@ -821,22 +832,36 @@ Return ONLY the JSON object described above, populated for THIS email.`;
       listCategory = "MARKETING_FILE";
     } else {
     // Priority: pre-processor (subject/from-address) → AI result → masthead title tag → Claude fallback → from-name
-    const preProcessorName = extractListFromSignals(subject, fromEmail, fromName);
-    const mastheadTitle = mastheadContext.match(/Email title: "([^"]+)"/)?.[1]?.trim();
-    let detectedListName: string | null = preProcessorName ?? result.list ?? mastheadTitle ?? null;
+    // A candidate survives if it names an EXISTING list, or is a plausible new list
+    // name — never this email's subject/headline (that minted one list per send).
+    const matchesExisting = (n: string) => {
+      const c = canonListName(n);
+      return lists.some(l => canonListName(l.name) === c || l.synonyms.some(syn => canonListName(syn) === c));
+    };
+    const usable = (n: string | null | undefined): string | null => {
+      if (!n) return null;
+      if (looksLikeSubjectLine(n, subject)) return null;
+      if (matchesExisting(n)) return n;
+      return isPlausibleNewListName(n, subject) ? cleanListName(n) : null;
+    };
+    const preProcessorName = usable(extractListFromSignals(subject, fromEmail, fromName));
+    const aiListName = usable(result.list);
+    if (result.list && !aiListName) console.log(`  ↳ rejected headline-like list name: "${result.list}"`);
+    const mastheadTitle = usable(mastheadContext.match(/Email title: "([^"]+)"/)?.[1]?.trim());
+    let detectedListName: string | null = preProcessorName ?? aiListName ?? mastheadTitle ?? null;
 
     if (!detectedListName) {
       // Ask Claude specifically about the list, with publisher context
       const publisherLists = lists.filter(l => l.publisherId === publisherId).map(l => l.name);
       const aiList = await suggestListViaClaude(fromEmail, fromName, subject, cleanBody, publisherLists);
-      detectedListName = aiList;
+      detectedListName = usable(aiList);
     }
 
     if (!detectedListName) {
       // Last resort: derive from from-name or from-email local part
       const localPart = fromEmail.split("@")[0] ?? "";
-      if (fromName && fromName.length > 2 && fromName.length < 80) {
-        detectedListName = fromName;
+      if (fromName && fromName.length > 2 && fromName.length < 80 && !fromName.includes("@")) {
+        detectedListName = cleanListName(fromName);
       } else if (localPart.length > 2) {
         // Convert CamelCase or slug → readable name
         detectedListName = localPart
@@ -851,15 +876,10 @@ Return ONLY the JSON object described above, populated for THIS email.`;
     }
 
     if (detectedListName) {
-      // Canonicalize for matching: lowercase, strip leading "The ", strip trailing
-      // punctuation, collapse whitespace. Prevents near-duplicate lists like
-      // "The Rude Awakening" vs "Rude Awakening" or "Trade of the Day." variants.
-      const canon = (s: string) =>
-        s.toLowerCase().trim()
-          .replace(/^the\s+/, "")
-          .replace(/[\s.,!?:;'"-]+$/, "")
-          .replace(/\s+/g, " ")
-          .trim();
+      // Canonicalize for matching (lib/list-name.ts): drops "The ", all punctuation,
+      // "&"→"and". Prevents near-duplicates like "Elon's Super Startup: Phase II" vs
+      // "Elon's Super Startup Phase II" or "Million-Dollar" vs "Million Dollar".
+      const canon = canonListName;
       const detectedLower = detectedListName.toLowerCase();
       const detectedCanon = canon(detectedListName);
       const existingList = lists.find(l =>
@@ -878,7 +898,7 @@ Return ONLY the JSON object described above, populated for THIS email.`;
         }
       } else {
         // Create it — mark autoCreated so the UI can indicate it was AI-generated
-        const wasAutoCreated = !preProcessorName && !result.list && !mastheadTitle;
+        const wasAutoCreated = !preProcessorName && !aiListName && !mastheadTitle;
         try {
           const newList = await prisma.list.create({
             data: { name: detectedListName, publisherId, isIgnored: false, autoCreated: wasAutoCreated },

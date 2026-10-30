@@ -2,6 +2,7 @@ import { google } from "googleapis";
 import { prisma } from "./prisma";
 import { getAuthedClient, placementFromLabels, extractHeader, parseFrom, extractBodies } from "./gmail";
 import { analyzeEmail, extractListForEmail } from "./analyze";
+import { canonListName } from "./list-name";
 
 export async function syncGmailAccount(accountEmail: string): Promise<{ newEmails: number; errors: number }> {
   let newEmails = 0, errors = 0;
@@ -123,7 +124,9 @@ export async function syncGmailAccount(accountEmail: string): Promise<{ newEmail
             if (!classified?.listId) {
               const listName = await extractListForEmail(subject, from.email, html, from.name);
               if (listName) {
-                const existing = await prisma.list.findFirst({ where: { name: { equals: listName, mode: "insensitive" } } });
+                const canon = canonListName(listName);
+                const existing = (await prisma.list.findMany({ select: { id: true, name: true, synonyms: true } }))
+                  .find(l => canonListName(l.name) === canon || l.synonyms.some(syn => canonListName(syn) === canon));
                 if (existing) {
                   patch.listId = existing.id;
                 } else {

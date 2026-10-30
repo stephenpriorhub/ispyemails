@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { syncGmailAccount } from "@/lib/sync";
 import { requireApiAdmin, requireApiUser } from "@/lib/api-auth";
+import { canonListName } from "@/lib/list-name";
 
 export async function GET() {
   const denied = await requireApiUser();
@@ -103,24 +104,25 @@ export async function PATCH(req: NextRequest) {
   if (!emails.length) return NextResponse.json({ processed: 0, remaining: 0 });
 
   const { extractListForEmail } = await import("@/lib/analyze");
-  const existingLists = await prisma.list.findMany({ select: { id: true, name: true, publisherId: true } });
+  const existingLists = await prisma.list.findMany({ select: { id: true, name: true, publisherId: true, synonyms: true } });
 
   let processed = 0;
   for (const email of emails) {
     const listName = await extractListForEmail(email.subject, email.fromEmail, email.bodyHtml, email.fromName ?? "");
     if (listName) {
       // Find or create the list
-      const existing = existingLists.find(l => l.name.toLowerCase() === listName.toLowerCase());
+      const canon = canonListName(listName);
+      const existing = existingLists.find(l => canonListName(l.name) === canon || l.synonyms.some(syn => canonListName(syn) === canon));
       let listId: string;
       if (existing) {
         listId = existing.id;
       } else {
         try {
           const newList = await prisma.list.create({
-            data: { name: listName, publisherId: email.publisherId ?? null, isIgnored: false },
+            data: { name: listName, publisherId: email.publisherId ?? null, isIgnored: false, autoCreated: true },
           });
           listId = newList.id;
-          existingLists.push({ id: listId, name: listName, publisherId: email.publisherId ?? null });
+          existingLists.push({ id: listId, name: listName, publisherId: email.publisherId ?? null, synonyms: [] });
         } catch {
           const found = await prisma.list.findFirst({ where: { name: { equals: listName, mode: "insensitive" } } });
           if (!found) continue;
