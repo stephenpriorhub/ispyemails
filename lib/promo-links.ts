@@ -166,6 +166,8 @@ const NOISE_PARAMS = new Set([
   "source_id", "sender", "placement", "interstitial", "schemaclick", "subjectlinetest",
   "today", "signed_date", "listname", "list", "date", "sent", "timestamp", "ts",
   "af_sub_siteid", "_bhiiv", "bhcl_id", "returnurl", "redirect", "redirect_url", "url",
+  // Per-send ids — new value on every mailing of the same page (Darwin / SFMC).
+  "darwin_internal_id", "drwnclick", "emailjobid", "jobid", "job_id",
   // Affiliate / creative attribution: the same landing page bought through two
   // different affiliates or rotated through two creatives is still one promo.
   "aff", "affid", "aff_id", "affiliate", "affiliate_id", "creative_id", "creativeid", "oid",
@@ -372,7 +374,7 @@ const NOT_A_PROMO_HEADLINE = [
   /whitelist/i, /frequently asked questions/i, /^faq\b/i, /offers? manager/i,
   /^(about|contact) /i, /restoring the lost art/i,
   /subscription cent(er|re)/i, /bot detection/i, /pardon our interruption/i, /are you a (human|robot)/i,
-  /verify(ing)? you are (human|not a robot)/i, /^hello!? we are\b/i, /^view (this )?email/i,
+  /verify(ing)? you are (human|not a robot)/i, /not a robot/i, /^one moment while/i, /^hello!? we are\b/i, /^view (this )?email/i,
   /^sign ?in\b/i, /^log ?in\b/i, /^my account\b/i,
 ];
 

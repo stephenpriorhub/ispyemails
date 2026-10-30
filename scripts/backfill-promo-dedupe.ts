@@ -10,30 +10,51 @@
  *   DATABASE_URL=<public url> npx tsx scripts/backfill-promo-dedupe.ts [--apply]
  */
 import { prisma } from "../lib/prisma";
-import { contentKey, isNotAPromo, rootDomain } from "../lib/promo-links";
+import { canonicalKey, contentKey, isNotAPromo, rootDomain } from "../lib/promo-links";
 
 const APPLY = process.argv.includes("--apply");
 
 async function main() {
   const promos = await prisma.promo.findMany({
     include: {
-      advertiser: { select: { label: true, isPlatform: true } },
+      advertiser: { select: { label: true, isPlatform: true, publisherId: true } },
       sightings: { select: { id: true, emailId: true, day: true } },
     },
     orderBy: { createdAt: "asc" },
   });
   console.log(`${promos.length} promos`);
 
-  // 1. Not a promo
-  const junk = promos.filter((p) => isNotAPromo(p.landingUrl, p.headline));
+  // 1. Not a promo. A bare homepage counts as junk when the same advertiser also
+  // has real promo paths AND the domain is a known publisher's own site — it's the
+  // logo link. Dedicated promo domains (elonsphase2.com/) keep their root page (the live scan checks
+  // the page for a VSL / opt-in instead; we don't have the HTML here).
+  const isBareHome = (u: string) => {
+    try { return new URL(u).pathname.replace(/\/+$/, "") === ""; } catch { return false; }
+  };
+  const advertisersWithPaths = new Set(promos.filter((p) => !isBareHome(p.landingUrl)).map((p) => p.advertiserId));
+  const junk = promos.filter(
+    (p) => isNotAPromo(p.landingUrl, p.headline) || (isBareHome(p.landingUrl) && !!p.advertiser.publisherId && advertisersWithPaths.has(p.advertiserId)),
+  );
   const byHeadline = new Map<string, number>();
   for (const p of junk) byHeadline.set(p.headline ?? p.canonicalKey, (byHeadline.get(p.headline ?? p.canonicalKey) ?? 0) + 1);
   console.log(`\nNOT A PROMO: ${junk.length}`);
   for (const [h, n] of [...byHeadline].sort((a, b) => b[1] - a[1])) console.log(`  ${String(n).padStart(3)}  ${h.slice(0, 90)}`);
   const junkIds = new Set(junk.map((p) => p.id));
 
-  // 2. Fingerprint + group
-  const groups = new Map<string, typeof promos>();
+  // 2. Fingerprint + group. Two promos are the same when they share the URL once
+  // per-send ids are stripped (darwin_internal_id, emailjobid…) OR the same page
+  // content. Union-find over both keys.
+  const parent = new Map<string, string>();
+  const find = (x: string): string => {
+    while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x)!)!); x = parent.get(x)!; }
+    return x;
+  };
+  const union = (a: string, b: string) => { const ra = find(a), rb = find(b); if (ra !== rb) parent.set(rb, ra); };
+  const firstByKey = new Map<string, string>();
+  const link = (key: string, id: string) => {
+    const seen = firstByKey.get(key);
+    if (seen) union(seen, id); else firstByKey.set(key, id);
+  };
   const keyOf = new Map<string, string | null>();
   for (const p of promos) {
     if (junkIds.has(p.id)) continue;
@@ -46,9 +67,16 @@ async function main() {
       isPlatform: p.advertiser.isPlatform,
     });
     keyOf.set(p.id, ck);
-    if (!ck) continue;
-    if (!groups.has(ck)) groups.set(ck, []);
-    groups.get(ck)!.push(p);
+    parent.set(p.id, p.id);
+    link(`url:${canonicalKey(p.landingUrl)}`, p.id);
+    if (ck) link(`content:${ck}`, p.id);
+  }
+  const groups = new Map<string, typeof promos>();
+  for (const p of promos) {
+    if (junkIds.has(p.id)) continue;
+    const root = find(p.id);
+    if (!groups.has(root)) groups.set(root, []);
+    groups.get(root)!.push(p);
   }
   const dupGroups = [...groups.values()].filter((g) => g.length > 1).sort((a, b) => b.length - a.length);
   const merged = dupGroups.reduce((n, g) => n + g.length - 1, 0);
