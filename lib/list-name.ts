@@ -97,3 +97,25 @@ export function isPlausibleNewListName(name: string | null | undefined, subject:
 export function cleanListName(name: string): string {
   return decodeEntities(name).replace(/\s+/g, " ").trim();
 }
+
+/**
+ * Hotlist = a temporary list stood up around one webinar, summit or launch, with
+ * its own branded masthead ("America Reloading Summit", "Elon's Secret AI Day").
+ * It mails hard for a few weeks and then goes quiet.
+ *
+ * Deterministic signals only — the Pass-1 AI adds `listIsEvent` for campaign
+ * mastheads with no event word ("Elon's Big Buy"). Applied when a list is
+ * CREATED; an admin's category is never overridden.
+ */
+const EVENT_WORDS =
+  /\b(summit|premiere|webinar|webcast|countdown|masterclass|master class|workshop|boot ?camp|challenge|showdown|symposium|conference|town ?hall|expo|livestream|live stream|special event|launch event|teach-?in|roundtable)\b/i;
+
+export function isHotlistSignal(name: string, fromEmail = ""): boolean {
+  // Money & Markets / Banyan send event lists from hl-<event>@ — "hl" = hotlist.
+  if (/^hl[-_.]/i.test(fromEmail.split("@")[0] ?? "")) return true;
+  const n = decodeEntities(name);
+  if (EVENT_WORDS.test(n)) return true;
+  // "Elon's Secret AI Day" — but never "Trade of the Day".
+  if (/\bday$/i.test(n.trim()) && !/\b(of the|every|each) day$/i.test(n.trim())) return true;
+  return false;
+}

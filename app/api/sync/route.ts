@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { syncGmailAccount } from "@/lib/sync";
 import { requireApiAdmin, requireApiUser } from "@/lib/api-auth";
-import { canonListName } from "@/lib/list-name";
+import { canonListName, isHotlistSignal } from "@/lib/list-name";
 
 export async function GET() {
   const denied = await requireApiUser();
@@ -119,7 +119,10 @@ export async function PATCH(req: NextRequest) {
       } else {
         try {
           const newList = await prisma.list.create({
-            data: { name: listName, publisherId: email.publisherId ?? null, isIgnored: false, autoCreated: true },
+            data: {
+              name: listName, publisherId: email.publisherId ?? null, isIgnored: false, autoCreated: true,
+              ...(isHotlistSignal(listName, email.fromEmail) ? { category: "HOTLIST" as const } : {}),
+            },
           });
           listId = newList.id;
           existingLists.push({ id: listId, name: listName, publisherId: email.publisherId ?? null, synonyms: [] });

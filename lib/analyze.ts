@@ -1,7 +1,7 @@
 import { prisma } from "./prisma";
 import { logAILearning } from "./learnings";
 import { getAffiliateSeed } from "./affiliate-seeds";
-import { canonListName, cleanListName, isPlausibleNewListName, looksLikeSubjectLine } from "./list-name";
+import { canonListName, cleanListName, isHotlistSignal, isPlausibleNewListName, looksLikeSubjectLine } from "./list-name";
 
 // ─── Pass 2 types ─────────────────────────────────────────────────────────────
 
@@ -285,6 +285,7 @@ interface AnalysisResult {
   publisherConfidence: number;
   list: string | null;          // newsletter name (masthead)
   listConfidence: number;
+  listIsEvent?: boolean;        // masthead is a temporary event/campaign list (→ HOTLIST)
   gurus: string[];              // editor/author names detected
   emailType: "LIFT_NOTE" | "EDITORIAL" | "PROMO" | "WELCOME" | "UNKNOWN";
   topics: string[];
@@ -657,8 +658,9 @@ Return ONLY this JSON:
 {
   "publisher": "Publisher name from list or null",
   "publisherConfidence": 0.0,
-  "list": "Newsletter/list name — the RECURRING brand, check MASTHEAD SIGNALS first (image alts/headings above), then from-name, then body. NEVER the subject line or an article headline. null if unclear. e.g. Image:'ALTUCHER CONFIDENTIAL' → 'Altucher Confidential'",
+  "list": "Newsletter/list name — the masthead brand, check MASTHEAD SIGNALS first (image alts/headings above), then from-name, then body. A branded event/campaign masthead counts (e.g. 'America Reloading Summit'). NEVER the subject line or an article headline. null if unclear. e.g. Image:'ALTUCHER CONFIDENTIAL' → 'Altucher Confidential'",
   "listConfidence": 0.0,
+  "listIsEvent": "true if the masthead is a TEMPORARY list built around one webinar, summit, live event or named promo campaign (e.g. 'America Reloading Summit', 'Elon's Secret AI Day', 'Elon's Big Buy'); false for an ongoing newsletter or the publisher's house brand",
   "gurus": ["ONLY the actual author/editor who WROTE this email — see rules; empty if unsure"],
   "emailType": "LIFT_NOTE|EDITORIAL|PROMO|WELCOME|UNKNOWN",
   "topics": ["topic1", "topic2"],
@@ -900,8 +902,12 @@ Return ONLY the JSON object described above, populated for THIS email.`;
         // Create it — mark autoCreated so the UI can indicate it was AI-generated
         const wasAutoCreated = !preProcessorName && !aiListName && !mastheadTitle;
         try {
+          const isHotlist = result.listIsEvent === true || isHotlistSignal(detectedListName, fromEmail);
           const newList = await prisma.list.create({
-            data: { name: detectedListName, publisherId, isIgnored: false, autoCreated: wasAutoCreated },
+            data: {
+              name: detectedListName, publisherId, isIgnored: false, autoCreated: wasAutoCreated,
+              ...(isHotlist ? { category: "HOTLIST" as const } : {}),
+            },
           });
           listId = newList.id;
           listPublisherId = publisherId;

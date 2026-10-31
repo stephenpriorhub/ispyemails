@@ -2,7 +2,7 @@ import { google } from "googleapis";
 import { prisma } from "./prisma";
 import { getAuthedClient, placementFromLabels, extractHeader, parseFrom, extractBodies } from "./gmail";
 import { analyzeEmail, extractListForEmail } from "./analyze";
-import { canonListName } from "./list-name";
+import { canonListName, isHotlistSignal } from "./list-name";
 
 export async function syncGmailAccount(accountEmail: string): Promise<{ newEmails: number; errors: number }> {
   let newEmails = 0, errors = 0;
@@ -132,7 +132,10 @@ export async function syncGmailAccount(accountEmail: string): Promise<{ newEmail
                 } else {
                   try {
                     const newList = await prisma.list.create({
-                      data: { name: listName, publisherId: classified?.publisherId ?? null, isIgnored: false, autoCreated: true },
+                      data: {
+                        name: listName, publisherId: classified?.publisherId ?? null, isIgnored: false, autoCreated: true,
+                        ...(isHotlistSignal(listName, from.email) ? { category: "HOTLIST" as const } : {}),
+                      },
                     });
                     patch.listId = newList.id;
                   } catch {
